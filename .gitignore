@@ -11,6 +11,9 @@
 *.madeline*
 MadelineProto.log*
 
+# Development-generated files
+/.build/
+
 # IDE
 /.idea/
 /.vscode/
@@ -18,4 +21,3 @@ MadelineProto.log*
 # OS
 .DS_Store
 Thumbs.db
-

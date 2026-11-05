@@ -1,22 +1,28 @@
 # Telegram Vacancy Monitor
 
-A PHP CLI application for monitoring Telegram job channels and filtering vacancies.
+Консольное PHP-приложение для персонального мониторинга Telegram-каналов с вакансиями и отбора подходящих предложений о работе.
 
-## Features (planned)
+## Статус
 
-- Monitor multiple Telegram channels
-- Track messages and prevent duplicates
-- Filter vacancies by configurable criteria
-- Analyze vacancies using OpenAI-compatible LLM APIs
-- Send notifications via Telegram Bot API
+Разработка MVP. Получение сообщений, фильтрация и уведомления пока не реализованы. Этот репозиторий содержит начальную основу приложения.
 
-## Tech stack
+## Планируемые возможности
 
-- PHP 8.5
-- MadelineProto
-- SQLite
-- OpenAI-compatible LLM API
+- Получение доступных публикаций из нескольких Telegram-каналов.
+- Отбор новых сообщений и исключение повторной обработки.
+- Фильтрация PHP-вакансий по настраиваемым критериям.
+- Анализ вакансий через настраиваемый OpenAI-совместимый API, включая локальные модели.
+- Отправка результатов пользователю через Telegram Bot API.
 
-## Status
+## Технологии
 
-MVP in development.
+- PHP 8.5 и Composer.
+- MadelineProto для клиентского доступа к Telegram.
+- SQLite для хранения состояния.
+- OpenAI-совместимый HTTP API для последующего анализа вакансий.
+
+## Разработка
+
+Первый этап — проверка Composer-зависимостей и получения сообщений из Telegram через пользовательскую сессию. Затем добавим хранение состояния, фильтры и уведомления.
+
+Для будущей работы с Telegram потребуется собственная авторизация. Сессии, токены и API-ключи не должны попадать в Git.
