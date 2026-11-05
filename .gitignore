@@ -1,0 +1,21 @@
+# Dependencies
+/vendor/
+
+# Configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data: database, sessions, logs
+/var/
+*.madeline*
+MadelineProto.log*
+
+# IDE
+/.idea/
+/.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
