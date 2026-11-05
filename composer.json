@@ -1,0 +1,43 @@
+{
+    "name": "yaleksandr89/telegram-vacancy-monitor",
+    "description": "Консольное PHP-приложение для мониторинга Telegram-каналов с вакансиями.",
+    "type": "project",
+    "keywords": [
+        "telegram",
+        "vacancies",
+        "php",
+        "cli"
+    ],
+    "authors": [
+        {
+            "name": "Александр Юрченко",
+            "role": "Developer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/yaleksandr89/telegram-vacancy-monitor/issues",
+        "source": "https://github.com/yaleksandr89/telegram-vacancy-monitor"
+    },
+    "require": {
+        "php": "^8.5",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-pdo_sqlite": "*",
+        "danog/madelineproto": "^8.19.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Yaleksandr\\TelegramVacancyMonitor\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Yaleksandr\\TelegramVacancyMonitor\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "optimize-autoloader": true
+    }
+}
