@@ -23,8 +23,8 @@
         "ext-curl": "*",
         "ext-json": "*",
         "ext-mbstring": "*",
-        "ext-pdo_sqlite": "*",
-        "danog/madelineproto": "^8.19.1"
+        "ext-pdo": "*",
+        "ext-pdo_sqlite": "*"
     },
     "autoload": {
         "psr-4": {
