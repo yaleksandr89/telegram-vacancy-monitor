@@ -2,9 +2,7 @@
 /vendor/
 
 # Configuration and secrets
-.env
-.env.*
-!.env.example
+/config/bot.ini
 
 # Runtime data: database, sessions, logs
 /var/
