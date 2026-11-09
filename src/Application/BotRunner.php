@@ -16,8 +16,8 @@ use Yaleksandr\TelegramVacancyMonitor\Telegram\Exception\BotTransportException;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Exception\UnexpectedResponseException;
 
 /**
- * EN: Receives authorized private messages and stores them before acknowledging receipt.
  * RU: Принимает разрешённые личные сообщения и сохраняет их до отправки подтверждения.
+ * EN: Receives authorized private messages and stores them before acknowledging receipt.
  */
 final readonly class BotRunner
 {
@@ -25,30 +25,50 @@ final readonly class BotRunner
         private BotApiClient $bot,
         private SqliteInboxRepository $inbox,
         private int $allowedUserId,
+        private ?VacancyAnalysisPipeline $pipeline = null,
     ) {}
 
     /**
-     * EN: Runs the long-polling worker until stopped by the operator or an error.
      * RU: Выполняет long polling до остановки оператором или возникновения ошибки.
+     * EN: Runs the long-polling worker until stopped by the operator or an error.
      *
-     * @throws BotApiException
-     * @throws BotTransportException
-     * @throws UnexpectedResponseException
+     * @throws Throwable
      */
     public function run(): never
     {
         while (true) {
-            $request = new GetUpdatesRequest($this->inbox->nextOffset(), 25);
-
-            foreach ($this->bot->getUpdates($request) as $update) {
-                $this->processUpdate($update);
-            }
+            $this->runIteration();
         }
     }
 
     /**
-     * EN: Ignores unauthorized senders and commits each update before replying.
+     * RU: Обрабатывает ожидающие задания и принимает обновления; ошибки хранилища передаются вызывающему коду.
+     * EN: Processes pending work and receives updates; storage errors propagate to the caller.
+     *
+     * @throws Throwable
+     */
+    public function runIteration(): void
+    {
+        // RU: Обрабатываем несколько ожидающих заданий, затем снова проверяем новые сообщения.
+        // EN: Process a few pending jobs, then check for new messages again.
+        $started = hrtime(true);
+        for ($batchIndex = 0; $batchIndex < 3; ++$batchIndex) {
+            if (!($this->pipeline?->processPending(time()) ?? false) || hrtime(true) - $started >= 2_000_000_000) {
+                break;
+            }
+        }
+        $nextAt = $this->pipeline?->nextDueAt();
+        $timeout = $nextAt === null ? 25 : max(1, min(25, $nextAt - time()));
+        $request = new GetUpdatesRequest($this->inbox->nextOffset(), $timeout);
+
+        foreach ($this->bot->getUpdates($request) as $update) {
+            $this->processUpdate($update);
+        }
+    }
+
+    /**
      * RU: Игнорирует посторонних отправителей и фиксирует обновление до ответа.
+     * EN: Ignores unauthorized senders and commits each update before replying.
      *
      * @throws Throwable
      */
@@ -73,7 +93,7 @@ final readonly class BotRunner
 
             if ($body !== null && str_starts_with($body, '/start')) {
                 $reply = 'Перешли сюда вакансию. Я сохраню текст и отвечу подтверждением.';
-            } elseif ($body !== null && trim($body) !== '') {
+            } elseif ($body !== null && mb_trim($body, encoding: 'UTF-8') !== '') {
                 $stored = new StoredMessage(
                     recipientChatId: $message->chatId,
                     recipientMessageId: $message->messageId,
@@ -100,8 +120,8 @@ final readonly class BotRunner
         try {
             $this->bot->sendMessage(new SendMessageRequest($chatId, $reply));
         } catch (BotApiException | BotTransportException | UnexpectedResponseException $exception) {
-            // EN: The update is durable, so failed delivery must not replay the vacancy.
             // RU: Обновление уже сохранено; ошибка отправки не должна повторно обрабатывать вакансию.
+            // EN: The update is durable, so failed delivery must not replay the vacancy.
             fwrite(STDERR, 'Не удалось отправить подтверждение: ' . $exception->getMessage() . PHP_EOL);
         }
     }

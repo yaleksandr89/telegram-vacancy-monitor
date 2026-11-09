@@ -41,10 +41,7 @@ jobs:
         run: composer install --prefer-dist --no-interaction --no-progress
 
       - name: Check PHP syntax
-        run: find bin src tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+        run: composer lint
 
       - name: Run smoke tests
-        run: |
-          php tests/InboxSmoke.php
-          php tests/BotApiSmoke.php
-          php tests/BotRunnerSmoke.php
+        run: composer test

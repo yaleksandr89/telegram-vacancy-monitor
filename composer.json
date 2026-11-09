@@ -36,6 +36,21 @@
             "Yaleksandr\\TelegramVacancyMonitor\\Tests\\": "tests/"
         }
     },
+    "scripts": {
+        "test": [
+            "@php tests/InboxSmoke.php",
+            "@php tests/BotApiSmoke.php",
+            "@php tests/BotRunnerSmoke.php",
+            "@php tests/AiAnalysisSmoke.php",
+            "@php tests/AnalysisRecoverySmoke.php"
+        ],
+        "lint": "find bin src tests -type f -name '*.php' -print0 | xargs -0 -n1 \"$PHP_BINARY\" -l",
+        "check": [
+            "@composer validate --no-check-publish",
+            "@lint",
+            "@test"
+        ]
+    },
     "config": {
         "sort-packages": true,
         "optimize-autoloader": true

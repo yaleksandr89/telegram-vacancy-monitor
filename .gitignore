@@ -3,6 +3,7 @@
 
 # Configuration and secrets
 /config/bot.ini
+/config/profile/local/
 
 # Runtime data: database, sessions, logs
 /var/

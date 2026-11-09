@@ -5,22 +5,23 @@ declare(strict_types=1);
 namespace Yaleksandr\TelegramVacancyMonitor\Storage;
 
 use PDO;
+use RuntimeException;
 use Throwable;
 
 /**
- * EN: Persists inbox messages and the Bot API update cursor in SQLite.
  * RU: Сохраняет входящие сообщения и курсор обновлений Bot API в SQLite.
- *
- * EN: Deduplication and cursor advancement share one transaction.
  * RU: Защита от дублей и продвижение курсора выполняются одной транзакцией.
+ *
+ * EN: Persists inbox messages and the Bot API update cursor in SQLite.
+ * EN: Deduplication and cursor advancement share one transaction.
  */
 final readonly class SqliteInboxRepository
 {
     public function __construct(private PDO $pdo) {}
 
     /**
-     * EN: Returns the first update ID not yet durably processed.
      * RU: Возвращает ID первого обновления, обработка которого ещё не сохранена.
+     * EN: Returns the first update ID not yet durably processed.
      */
     public function nextOffset(): int
     {
@@ -30,8 +31,8 @@ final readonly class SqliteInboxRepository
     }
 
     /**
-     * EN: Saves an optional message and commits its update ID atomically.
      * RU: Атомарно сохраняет необязательное сообщение и ID обработанного обновления.
+     * EN: Saves an optional message and commits its update ID atomically.
      *
      * @throws Throwable
      */
@@ -43,8 +44,8 @@ final readonly class SqliteInboxRepository
             $inserted = false;
 
             if ($message !== null) {
-                // EN: Only unique-key conflicts represent duplicates; other SQL errors must fail the transaction.
                 // RU: Дубликаты определяются только уникальными ключами; остальные SQL-ошибки прерывают транзакцию.
+                // EN: Only unique-key conflicts represent duplicates; other SQL errors must fail the transaction.
                 $statement = $this->pdo->prepare(<<<'SQL'
                     INSERT INTO messages (
                         recipient_chat_id, recipient_message_id, origin_type,
@@ -63,16 +64,26 @@ final readonly class SqliteInboxRepository
                     'body' => $message->body,
                 ]);
                 $inserted = $statement->rowCount() === 1;
+                if ($inserted) {
+                    $job = $this->pdo->prepare('INSERT INTO analysis_jobs (message_id) VALUES (:id)');
+                    $job->execute(['id' => (int) $this->pdo->lastInsertId()]);
+                    if ($job->rowCount() !== 1) {
+                        throw new RuntimeException('Не удалось создать задание для сохранённого сообщения.');
+                    }
+                }
             }
 
-            // EN: Never advance the cursor independently of the stored message.
             // RU: Нельзя продвигать курсор отдельно от сохранения сообщения.
+            // EN: Never advance the cursor independently of the stored message.
             $statement = $this->pdo->prepare(<<<'SQL'
                 INSERT INTO cursor (name, next_offset)
                 VALUES ('main', :next_offset)
                 ON CONFLICT(name) DO UPDATE SET next_offset = MAX(next_offset, excluded.next_offset)
                 SQL);
             $statement->execute(['next_offset' => $updateId + 1]);
+            if ($statement->rowCount() !== 1) {
+                throw new RuntimeException('Не удалось сохранить курсор обработки.');
+            }
             $this->pdo->commit();
 
             return $inserted;
