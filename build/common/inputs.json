@@ -1,0 +1,87 @@
+{
+  "php": {
+    "url": "https://www.php.net/distributions/php-8.5.12.tar.xz",
+    "sha256": "08bc2eba2a588654ade1357174aa646b761556c862dda0678345ee29ed481209"
+  },
+  "php-windows": {
+    "url": "https://downloads.php.net/~windows/releases/archives/php-8.5.12-1-nts-Win32-vs17-x64.zip",
+    "sha256": "2a36a2edcb7a5b9252f638fd5e4cf84d7f6e066092654220dc0b63e5cf4e9723"
+  },
+  "curl": {
+    "url": "https://curl.se/download/curl-8.23.0.tar.xz",
+    "sha256": "8dadd7d2536a314f982ad05a651b713f426bf7d02cc2c76cffb9796f2218e6c5"
+  },
+  "sqlite": {
+    "url": "https://www.sqlite.org/2026/sqlite-autoconf-3540100.tar.gz",
+    "sha256": "926ef8d3eab93fbf6e06011901273eec076b25594a4e1cdadd50c987f4f6d64e",
+    "sha3_256": "b6ced585c750916b1052667239a12c25a7ff34e7f06e1e6e01ecb0427657d9c4"
+  },
+  "gum-linux": {
+    "url": "https://github.com/charmbracelet/gum/releases/download/v2.0.2/gum_2.0.2_Linux_x86_64.tar.gz",
+    "sha256": "d842e06d93dbed90af48cb8dd10698db6f22e331fc40346bb37bbc753109edc2"
+  },
+  "gum-windows": {
+    "url": "https://github.com/charmbracelet/gum/releases/download/v2.0.2/gum_2.0.2_Windows_x86_64.zip",
+    "sha256": "0397091dec9b4e8f00e02b90fd3eb07bf45acabbdb61d67437950f18e03a8b79"
+  },
+  "gum-macos": {
+    "url": "https://github.com/charmbracelet/gum/releases/download/v2.0.2/gum_2.0.2_Darwin_arm64.tar.gz",
+    "sha256": "4777a69b1170b8db23c95d5889fb32186cfda1a3ac950d339aa17e3513633890"
+  },
+  "ca": {
+    "url": "https://curl.se/ca/cacert.pem",
+    "sha256": "427c064216761a1e72a8b30f0d954d08cb6e4435a82091fb865afd20c8497285"
+  },
+  "php-signature": {
+    "url": "https://www.php.net/distributions/php-8.5.12.tar.xz.asc",
+    "sha256": "ee9317cb40874ee4f733298e3159197a39e602020f8229c16d1bedf1aaefd242"
+  },
+  "php-keyring": {
+    "url": "https://www.php.net/distributions/php-keyring.gpg",
+    "sha256": "43fcb3eaf65536cb0833c229b492c70cfad8562138164dd13673e08925d6c56c"
+  },
+  "curl-signature": {
+    "url": "https://curl.se/download/curl-8.23.0.tar.xz.asc",
+    "sha256": "dba1562fec2bf698a1226054e6757940e4bf2ab87b3b222a5e7b91348f0b82e2"
+  },
+  "curl-keyring": {
+    "url": "https://daniel.haxx.se/mykey.asc",
+    "sha256": "64619d3c1a2b68da837014b2ab02a049ed2c69aaebfa10a20a4f29dab003ecb8"
+  },
+  "gum-checksums": {
+    "url": "https://github.com/charmbracelet/gum/releases/download/v2.0.2/checksums.txt",
+    "sha256": "297d032d04b71082c1d3c3614c8ffffce9b096a854e97fa363818e64e7652b7d"
+  },
+  "gum-signature": {
+    "url": "https://github.com/charmbracelet/gum/releases/download/v2.0.2/checksums.txt.sigstore.json",
+    "sha256": "6dc56c102f8aa5253256f789ba68d00169b9136eb132d5c38f1ba5e9b717debf"
+  },
+  "sigstore-root": {
+    "url": "https://raw.githubusercontent.com/sigstore/root-signing/c3310c530ba900dec2a2f1ee093f35c5d2de37f4/targets/trusted_root.json",
+    "sha256": "6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66"
+  },
+  "cosign-linux": {
+    "url": "https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64",
+    "sha256": "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa"
+  },
+  "cosign-macos": {
+    "url": "https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-darwin-arm64",
+    "sha256": "9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4"
+  },
+  "cosign-windows": {
+    "url": "https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-windows-amd64.exe",
+    "sha256": "cbe953787074611f1334cbf37dc1cf953995bb8c45398eb4fc7bb781d29c1f2a"
+  },
+  "go-linux": {
+    "url": "https://go.dev/dl/go1.27.4.linux-amd64.tar.gz",
+    "sha256": "7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840"
+  },
+  "go-macos": {
+    "url": "https://go.dev/dl/go1.27.4.darwin-arm64.tar.gz",
+    "sha256": "91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4"
+  },
+  "go-windows": {
+    "url": "https://go.dev/dl/go1.27.4.windows-amd64.zip",
+    "sha256": "178ab98950ac69ab25069307dc6ade79f3816e414cce95b4da166a115cde1e7e"
+  }
+}

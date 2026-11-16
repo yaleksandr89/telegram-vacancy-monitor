@@ -1,0 +1,38 @@
+{
+  "installer": {
+    "url": "https://aka.ms/vc14/vc_redist.x64.exe",
+    "size": 18863624,
+    "sha256": "9c02c9ed120f671b900e6b9471d890e3b2414117a7e53f4ae2e855466fa2b7c9",
+    "version": "14.52.37029.0",
+    "subject": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+    "thumbprint": "AB172913A2960A224809EE8A0C371CD47A079B72"
+  },
+  "attached": {
+    "offset": 629952,
+    "size": 18223522,
+    "sha256": "f83ea8d07474846b64c6d8ea3dd3dc4aacba9bfc6d09a0cf2400a847c0ff29e0"
+  },
+  "cab": {
+    "member": "a4",
+    "source": "packages/vcRuntimeMinimum_amd64/cab1.cab",
+    "sha256": "596629040fda9c7eb2b15d809199bf691e7a61d12e8e400f2e94e3871866e9a3",
+    "subject": "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+    "thumbprint": "AB172913A2960A224809EE8A0C371CD47A079B72"
+  },
+  "dll": {
+    "member": "vcruntime140.dll_amd64",
+    "destination": "php/vcruntime140.dll",
+    "machine": 34404,
+    "sha256": "eb1ee979bf02324712346e5bdbfc59c785388bc50d18cc2688aae4b0734915a0",
+    "version": "14.52.37029.0",
+    "subject": "CN=Microsoft Windows Software Compatibility Publisher, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+    "thumbprint": "FD696F80D310D74E24DCE1F5120B8C00C67DE42A"
+  },
+  "license": {
+    "url": "https://visualstudio.microsoft.com/wp-content/uploads/2025/10/Visual-C-V14-License-Redistributable_and_Runtime_ENU.docx",
+    "sha256": "08651651a7602fc7c0e2763de0fde1ff9f868df2780597cd1775ee9d6441c783"
+  },
+  "redist_terms": "https://learn.microsoft.com/en-us/visualstudio/releases/2026/redistribution#visual-c-runtime-files",
+  "release_gate": "Redistribution requires validly licensed Visual Studio/Build Tools and applicable REDIST rights. Owner entitlement NOT VERIFIED; runtime EULA alone does not grant redistribution rights.",
+  "extractor": "7-Zip 23.01"
+}

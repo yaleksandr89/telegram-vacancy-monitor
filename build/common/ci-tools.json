@@ -1,0 +1,43 @@
+{
+  "setup_php": {
+    "repository": "https://github.com/shivammathur/setup-php.git",
+    "commit": "f3e473d116dcccaddc5834248c87452386958240",
+    "reason": "CI-only PHP 8.5. Owner trusts maintained mutable upstream bootstrap on all three platforms; not a transitive cryptographic pin."
+  },
+  "composer": {
+    "version": "2.11.2",
+    "url": "https://getcomposer.org/download/2.11.2/composer.phar",
+    "sha256": "dd158c0afd41d15fac89e1b4e47b5d42911fe316c3687cd5edac98319b25d028",
+    "evidence": "https://getcomposer.org/download/",
+    "reason": "Build-only production autoload; never bundled."
+  },
+  "seven_zip": {
+    "version": "23.01",
+    "url": "https://www.7-zip.org/a/7z2301-x64.exe",
+    "sha256": "26cb6e9f56333682122fafe79dbcdfd51e9f47cc7217dccd29ac6fc33b5598cd",
+    "evidence": "https://sourceforge.net/projects/sevenzip/files/7-Zip/23.01/7z2301-x64.exe/download",
+    "reason": "Extract verified installer bytes with runner 7-Zip; do not execute installer. Required full 7z.exe CAB support."
+  },
+  "linux": {
+    "image": "ubuntu@sha256:77eb101c607d6e3d4f5ad0c8a02c2136c689b98aba1f359e6502ba517e5c57ec",
+    "image_evidence": "https://registry-1.docker.io/v2/library/ubuntu/manifests/24.04",
+    "snapshot": "20261115T000000Z",
+    "base_url": "https://snapshot.ubuntu.com/ubuntu/20261115T000000Z/",
+    "archive_fingerprint": "F6ECB3762474EDA9D21B7022871920D1991BC93C",
+    "inrelease_sha256": {
+      "noble": "cdb2f31d809f589719a53c6ad15f255b27569c4059542ada282aaa21b8e164b0",
+      "noble-updates": "1d61be78c673b98f8c94d6a913645ee03f1f28315cc3fe7fc31357b9793266a3",
+      "noble-security": "58c274e629044455eff0a76d09c6b30e1b4bebb6253ca67c4e23cdddba4e7f64"
+    },
+    "packages": {
+      "libc6": {"version": "2.39-0ubuntu8.12", "path": "pool/main/g/glibc/libc6_2.39-0ubuntu8.12_amd64.deb", "sha256": "d821b41fc59cb4978ecd53bc83e5c964ac15d305c8d2ac4c8a35aebe55010fb9"},
+      "libc6-dev": {"version": "2.39-0ubuntu8.12", "path": "pool/main/g/glibc/libc6-dev_2.39-0ubuntu8.12_amd64.deb", "sha256": "d81dd6dc9d515762cc93f338efa6219252acf3e2e87b5b89dd7dc517741e6eed"},
+      "libssl3t64": {"version": "3.0.13-0ubuntu3.16", "path": "pool/main/o/openssl/libssl3t64_3.0.13-0ubuntu3.16_amd64.deb", "sha256": "219f43b1cd836a4da550938db5fda93160d269d39a4edcf1f1ce698a470db797"},
+      "libssl-dev": {"version": "3.0.13-0ubuntu3.16", "path": "pool/main/o/openssl/libssl-dev_3.0.13-0ubuntu3.16_amd64.deb", "sha256": "2b4734df0475e305ac03abb0a2cc5659651ed37ef02d967a1c4033a154cf714b"},
+      "libgcc-s1": {"version": "14.2.0-4ubuntu2~24.04.1", "path": "pool/main/g/gcc-14/libgcc-s1_14.2.0-4ubuntu2~24.04.1_amd64.deb", "sha256": "aa7fadbe33b78bcf99885318040601c550c208929565b179891d9a3cc2aa68cd"},
+      "gcc-13": {"version": "13.3.0-6ubuntu2~24.04.1", "path": "pool/main/g/gcc-13/gcc-13_13.3.0-6ubuntu2~24.04.1_amd64.deb", "sha256": "7438ff160b020a74970672189ecae25d0ca650de6d7f543f12a3134192cffbd9"},
+      "bubblewrap": {"version": "0.9.0-1ubuntu0.3", "path": "pool/main/b/bubblewrap/bubblewrap_0.9.0-1ubuntu0.3_amd64.deb", "sha256": "2461f1beee9cb04c8942739fe1a2b37e7b7c2a3d518f0779dc75f9245baa3094"}
+    },
+    "reason": "CI-only native x86_64 toolchain. Signed frozen Ubuntu packages, followed by all six runtime ELF hash checks. No host package mutation."
+  }
+}
