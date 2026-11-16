@@ -28,7 +28,7 @@ final readonly class AnalysisResultValidator
             throw new AiException('invalid_output', true, $exception);
         }
         $enums = AnalysisResult::enumValues();
-        $keys = [...array_keys(AnalysisResult::TEXT_LIMITS), ...AnalysisResult::LIST_FIELDS, ...array_keys($enums)];
+        $keys = [...AnalysisResult::TEXT_FIELDS, ...AnalysisResult::LIST_FIELDS, ...array_keys($enums)];
         if (!$object instanceof stdClass) {
             throw new AiException('invalid_output', true);
         }
@@ -38,14 +38,14 @@ final readonly class AnalysisResultValidator
         }
         foreach ($keys as $key) {
             if (in_array($key, AnalysisResult::LIST_FIELDS, true)) {
-                if (!is_array($data[$key]) || !array_is_list($data[$key]) || count($data[$key]) > AnalysisResult::LIST_LIMIT) {
+                if (!is_array($data[$key]) || !array_is_list($data[$key])) {
                     throw new AiException('invalid_output', true);
                 }
                 foreach ($data[$key] as $item) {
-                    $this->checkText($item, AnalysisResult::LIST_ITEM_LIMIT);
+                    $this->checkText($item);
                 }
-            } elseif (isset(AnalysisResult::TEXT_LIMITS[$key])) {
-                $this->checkText($data[$key], AnalysisResult::TEXT_LIMITS[$key]);
+            } elseif (in_array($key, AnalysisResult::TEXT_FIELDS, true)) {
+                $this->checkText($data[$key]);
             } elseif (!is_string($data[$key]) || !in_array($data[$key], $enums[$key], true)) {
                 throw new AiException('invalid_output', true);
             }
@@ -57,12 +57,11 @@ final readonly class AnalysisResultValidator
         );
     }
 
-    private function checkText(mixed $value, int $limit): void
+    private function checkText(mixed $value): void
     {
         if (
             !is_string($value) || !mb_check_encoding($value, 'UTF-8') || mb_trim($value, encoding: 'UTF-8') === ''
-            || mb_strlen($value, 'UTF-8') > $limit
-            || preg_match('/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]|https?:\/\/|<[^>]*>/iu', $value) === 1
+            || preg_match('/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]|https?:\/\/|<[^>]*>/iu', $value) !== 0
         ) {
             throw new AiException('invalid_output', true);
         }

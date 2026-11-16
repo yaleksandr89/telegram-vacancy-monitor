@@ -18,8 +18,8 @@ final readonly class VacancyResultFormatter
     private const int MESSAGE_LIMIT = 4096;
 
     /**
-     * RU: Сокращает только второстепенные списки; сохраняет вердикт, основные условия и строку источника.
-     * EN: Shortens optional lists only; preserves verdict, core conditions and the source footer.
+     * RU: Сохраняет полный текст, если он помещается; иначе сокращает представление с неизменным источником.
+     * EN: Keeps the full text when it fits; otherwise compacts presentation with an unchanged source.
      */
     public function format(?AnalysisResult $result, int $messageId, ?string $rejection = null, ?string $source = null): string
     {
@@ -50,19 +50,50 @@ final readonly class VacancyResultFormatter
         foreach ($sections as $label => $items) {
             $sectionLines[] = $label . ': ' . implode('; ', $items);
         }
-        // RU: Сохраняем основные поля и источник целиком; оставшееся место делим между второстепенными списками.
-        // EN: Keep core fields and the source intact; share the remaining space among optional lists.
-        if ($sections !== [] && $this->telegramLength(implode("\n", [...$lines, ...$sectionLines, ...$footer])) > self::MESSAGE_LIMIT) {
-            $budget = intdiv(self::MESSAGE_LIMIT - $this->telegramLength(implode("\n", [...$lines, ...$footer])), count($sections)) - 1;
-            $sectionLines = [];
-            foreach ($sections as $label => $items) {
-                $heading = $label . ' (сокращено): ';
-                $itemBudget = intdiv($budget - $this->telegramLength($heading) - 2 * (count($items) - 1), count($items));
-                $sectionLines[] = $heading . implode('; ', array_map(fn (string $item): string => $this->shorten($item, $itemBudget), $items));
-            }
+        $full = implode("\n", [...$lines, ...$sectionLines, ...$footer]);
+        if ($result === null || $this->telegramLength($full) <= self::MESSAGE_LIMIT) {
+            return $full;
         }
 
-        return implode("\n", [...$lines, ...$sectionLines, ...$footer]);
+        $fields = [
+            'Компания: ' => $result->company,
+            'Позиция: ' => $result->position,
+            'Обоснование: ' => $result->rationale,
+            'География и формат: ' => $result->geography,
+            'Оплата: ' => $result->pay,
+        ];
+        foreach ($sections as $label => $items) {
+            $fields[$label . ': '] = implode('; ', $items);
+        }
+        $header = [$lines[0], $lines[1], '(сокращено для Telegram)'];
+        $fixed = implode("\n", [...$header, ...array_keys($fields), ...$footer]);
+        $remaining = self::MESSAGE_LIMIT - $this->telegramLength($fixed);
+        $lengths = array_map($this->telegramLength(...), $fields);
+        $budgets = [];
+        foreach ($lengths as $label => $length) {
+            $budgets[$label] = min(120, $length);
+            $remaining -= $budgets[$label];
+        }
+        // RU: Каждому разделу оставляем место; остаток отдаём прежде всего обоснованию и условиям.
+        // RU: Число проходов ограничено бюджетом сообщения, а не длиной входного текста.
+        // EN: Reserve room for every section; favor rationale and conditions with the remaining space.
+        // EN: The message budget bounds the number of passes, regardless of input length.
+        $weights = ['Обоснование: ' => 4, 'География и формат: ' => 3, 'Оплата: ' => 3];
+        do {
+            $allocated = 0;
+            foreach ($lengths as $label => $length) {
+                $extra = min($remaining, $length - $budgets[$label], $weights[$label] ?? 1);
+                $budgets[$label] += $extra;
+                $remaining -= $extra;
+                $allocated += $extra;
+            }
+        } while ($remaining > 0 && $allocated > 0);
+        $compact = [];
+        foreach ($fields as $label => $text) {
+            $compact[] = $label . $this->shorten($text, $budgets[$label]);
+        }
+
+        return implode("\n", [...$header, ...$compact, ...$footer]);
     }
 
     private function shorten(string $text, int $budget): string
@@ -70,11 +101,18 @@ final readonly class VacancyResultFormatter
         if ($this->telegramLength($text) <= $budget) {
             return $text;
         }
-        while ($this->telegramLength($text) > $budget - 1) {
-            $text = mb_substr($text, 0, -1, 'UTF-8');
+        $prefix = '';
+        $used = 0;
+        foreach (mb_str_split(mb_substr($text, 0, $budget - 1, 'UTF-8'), 1, 'UTF-8') as $character) {
+            $units = strlen($character) === 4 ? 2 : 1;
+            if ($used + $units > $budget - 1) {
+                break;
+            }
+            $prefix .= $character;
+            $used += $units;
         }
 
-        return $text . '…';
+        return $prefix . '…';
     }
 
     private function telegramLength(string $text): int

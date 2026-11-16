@@ -90,6 +90,18 @@ final readonly class SqliteAnalysisRepository
     }
 
     /**
+     * RU: Фиксирует единственную попытку уведомления до HTTP; после сбоя claim не снимается.
+     * EN: Claims the single notification attempt before HTTP; crashes do not reset the claim.
+     */
+    public function claimAnalysisStart(int $id): bool
+    {
+        $statement = $this->pdo->prepare("UPDATE analysis_jobs SET analysis_start_claimed = 1
+            WHERE message_id = :id AND analysis_status = 'in_progress' AND analysis_start_claimed = 0");
+        $statement->execute(['id' => $id]);
+        return $statement->rowCount() === 1;
+    }
+
+    /**
      * RU: Сохраняет оценку и уведомление, затем разрешает доставку.
      * EN: Saves the evaluation and notification before making delivery eligible.
      *

@@ -8,43 +8,30 @@ use JsonException;
 use Yaleksandr\TelegramVacancyMonitor\Analysis\Exception\AiException;
 
 /**
- * RU: Хранит типизированную оценку вакансии и общие ограничения ответа.
- * EN: Holds the typed vacancy evaluation and shared output limits.
+ * RU: Хранит полную типизированную оценку вакансии и схему ответа.
+ * EN: Holds the complete typed vacancy evaluation and output schema.
  */
 final readonly class AnalysisResult
 {
-    // RU: Ограничиваем длину текстовых полей, чтобы итоговый ответ помещался в сообщение Телеграмма.
-    // EN: Limit text fields so the final response fits in a Telegram message.
-    public const int LABEL_LIMIT = 120;
-    public const int CONDITION_LIMIT = 240;
-    public const int RATIONALE_LIMIT = 320;
-    public const int LIST_ITEM_LIMIT = 120;
-    public const int LIST_LIMIT = 4;
-    public const array TEXT_LIMITS = [
-        'company' => self::LABEL_LIMIT,
-        'position' => self::LABEL_LIMIT,
-        'geography' => self::CONDITION_LIMIT,
-        'pay' => self::CONDITION_LIMIT,
-        'rationale' => self::RATIONALE_LIMIT,
-    ];
+    public const array TEXT_FIELDS = ['company', 'position', 'geography', 'pay', 'rationale'];
     public const array LIST_FIELDS = ['matches', 'risks', 'missing'];
 
     /**
-     * RU: Строит машиночитаемую схему из тех же ограничений, которые использует проверка.
-     * EN: Builds a machine-readable contract from the same limits used by validation.
+     * RU: Строит машиночитаемую схему из тех же полей и типов, которые использует проверка.
+     * EN: Builds a machine-readable contract from the same fields and types used by validation.
      *
      * @return array<string, mixed>
      */
     public static function jsonSchema(): array
     {
         $properties = [];
-        foreach (self::TEXT_LIMITS as $field => $limit) {
-            $properties[$field] = ['type' => 'string', 'minLength' => 1, 'maxLength' => $limit];
+        foreach (self::TEXT_FIELDS as $field) {
+            $properties[$field] = ['type' => 'string', 'minLength' => 1];
         }
         foreach (self::LIST_FIELDS as $field) {
             $properties[$field] = [
-                'type' => 'array', 'maxItems' => self::LIST_LIMIT,
-                'items' => ['type' => 'string', 'minLength' => 1, 'maxLength' => self::LIST_ITEM_LIMIT],
+                'type' => 'array',
+                'items' => ['type' => 'string', 'minLength' => 1],
             ];
         }
         foreach (self::enumValues() as $field => $values) {

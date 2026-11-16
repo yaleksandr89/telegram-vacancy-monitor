@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Yaleksandr\TelegramVacancyMonitor\Storage;
 
 use PDO;
+use Throwable;
 
 /**
  * RU: Инициализирует существующую схему SQLite отдельно от операций с сообщениями.
@@ -15,10 +16,28 @@ final readonly class SqliteSchema
     public function __construct(private PDO $pdo) {}
 
     /**
-     * RU: Повторяемая инициализация без удаления или миграции пользовательских данных.
-     * EN: Idempotent bootstrap; does not drop or migrate existing user data.
+     * RU: Повторяемая инициализация и добавочная миграция без изменения существующих данных.
+     * EN: Idempotent bootstrap and additive migration without changing existing data.
      */
     public function ensure(): void
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $this->ensureTables();
+            $columns = $this->pdo->query('PRAGMA table_info(analysis_jobs)')->fetchAll(PDO::FETCH_ASSOC);
+            if (!in_array('analysis_start_claimed', array_column($columns, 'name'), true)) {
+                $this->pdo->exec('ALTER TABLE analysis_jobs ADD COLUMN analysis_start_claimed INTEGER NOT NULL DEFAULT 0 CHECK (analysis_start_claimed IN (0, 1))');
+            }
+            $this->pdo->commit();
+        } catch (Throwable $exception) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
+    private function ensureTables(): void
     {
         $this->pdo->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS messages (
@@ -42,6 +61,11 @@ final readonly class SqliteSchema
             CREATE TABLE IF NOT EXISTS cursor (
                 name TEXT PRIMARY KEY,
                 next_offset INTEGER NOT NULL
+            )
+            SQL);
+        $this->pdo->exec(<<<'SQL'
+            CREATE TABLE IF NOT EXISTS received_updates (
+                update_id INTEGER PRIMARY KEY
             )
             SQL);
         $this->pdo->exec(<<<'SQL'

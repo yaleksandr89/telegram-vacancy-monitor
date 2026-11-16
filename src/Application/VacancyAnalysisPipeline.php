@@ -89,6 +89,14 @@ final readonly class VacancyAnalysisPipeline
             }
             $started = hrtime(true);
             try {
+                if ($reason === null) {
+                    // RU: Оценщик отвергает такой вход до HTTP; уведомление старта здесь было бы ложным.
+                    // EN: The evaluator rejects this input before HTTP; a start notification here would be false.
+                    if (strlen($job['body']) > 65536 || !mb_check_encoding($job['body'], 'UTF-8')) {
+                        throw new AiException('vacancy_size_or_encoding', false);
+                    }
+                    $this->notifyAnalysisStart($id, (int) $job['recipient_chat_id']);
+                }
                 $result = $reason === null ? $this->evaluator->evaluate($job['body'], $this->profile) : null;
                 $verifiedOriginIds = $this->formatter->verifiedSource($job) !== null;
                 $resultJson = $result?->toJson($verifiedOriginIds);
@@ -104,6 +112,21 @@ final readonly class VacancyAnalysisPipeline
         }
 
         return false;
+    }
+
+    private function notifyAnalysisStart(int $id, int $chatId): void
+    {
+        if (!$this->jobs->claimAnalysisStart($id)) {
+            return;
+        }
+        try {
+            $this->bot->sendMessage(new SendMessageRequest(
+                $chatId,
+                'Вакансия передана на анализ ИИ. Результат придёт сюда, как только анализ завершится.',
+            ));
+        } catch (BotApiException | BotTransportException | UnexpectedResponseException) {
+            error_log('Не удалось отправить уведомление о начале анализа ИИ.');
+        }
     }
 
     private function processDelivery(int $now): bool

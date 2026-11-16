@@ -26,11 +26,19 @@ require __DIR__ . '/Support/AnalysisFixtures.php';
 [$pdo, $ai, $telegram, $pipeline, $runner, $profile] = fixture();
 intake($runner, 1, 10, 'Разработка API. https://example.org/vacancy', origin: 8);
 verify((int) $pdo->query('SELECT COUNT(*) FROM analysis_jobs')->fetchColumn() === 1, 'Приём не создал задание.');
-$ai->beforeCall = static function () use ($pdo): void {
+$ai->beforeCall = static function () use ($pdo, $telegram): void {
     verify(!$pdo->inTransaction(), 'Запрос ИИ внутри транзакции SQLite.');
+    verify(count($telegram->texts) === 2 && $telegram->texts[1] === 'Вакансия передана на анализ ИИ. Результат придёт сюда, как только анализ завершится.', 'ИИ вызван до уведомления о начале анализа.');
+    verify((int) $pdo->query('SELECT analysis_start_claimed FROM analysis_jobs')->fetchColumn() === 1, 'Claim не сохранён до ИИ.');
 };
-$telegram->beforeSend = static function () use ($pdo): void {
-    verify(!$pdo->inTransaction() && $pdo->query('SELECT analysis_status FROM analysis_jobs LIMIT 1')->fetchColumn() === 'completed', 'Отправка до сохранения результата или внутри транзакции.');
+$telegram->beforeSend = static function () use ($pdo, $ai, $telegram): void {
+    verify(!$pdo->inTransaction(), 'Отправка внутри транзакции SQLite.');
+    $job = $pdo->query('SELECT * FROM analysis_jobs LIMIT 1')->fetch(PDO::FETCH_ASSOC);
+    if (count($telegram->texts) === 1) {
+        verify($job['analysis_status'] === 'in_progress' && (int) $job['analysis_start_claimed'] === 1 && count($ai->calls) === 0, 'Старт отправлен до сохранения in_progress/claim или после ИИ.');
+    } else {
+        verify($job['analysis_status'] === 'completed' && $job['result_json'] !== null && $job['notification'] !== null, 'Итог отправлен до сохранения результата.');
+    }
 };
 $pipeline->processPending(100);
 $telegram->beforeSend = null;
@@ -38,6 +46,7 @@ $job = $pdo->query('SELECT * FROM analysis_jobs')->fetch(PDO::FETCH_ASSOC);
 verify($job['analysis_status'] === 'completed' && $job['delivery_status'] === 'delivered', 'Сквозная обработка не завершена.');
 verify((int) $job['analysis_attempts'] === 1 && $job['profile_hash'] === testPrompt()->fingerprint($profile), 'Попытка или версия профиля неверны.');
 verify($job['verdict'] === 'apply' && str_contains($job['result_json'], 'API'), 'Результат не сохранён.');
+verify(count($telegram->texts) === 3 && $telegram->texts[0] === 'Вакансия сохранена.', 'Неверный порядок подтверждения, старта и итога.');
 $final = end($telegram->texts);
 verify(str_contains($final, 'Откликаться') && str_contains($final, 'Подходящие задачи') && str_contains($final, 'ссылка из объявления (не проверена)') && str_contains($final, 'https://example.org/vacancy'), 'Некорректное уведомление или ссылка.');
 $request = json_decode($ai->calls[0]['json'], true, flags: JSON_THROW_ON_ERROR);
@@ -69,6 +78,7 @@ intake($runner, 1, 10, 'Только ночная смена.');
 $pipeline->processPending(100);
 verify(count($ai->calls) === 0 && str_contains(end($telegram->texts), 'Пропустить'), 'Точный отказ вызвал ИИ или не доставлен.');
 verify((int) $pdo->query('SELECT analysis_attempts FROM analysis_jobs')->fetchColumn() === 0, 'Предфильтр учтён как попытка ИИ.');
+verify(count($telegram->texts) === 2 && (int) $pdo->query('SELECT analysis_start_claimed FROM analysis_jobs')->fetchColumn() === 0, 'Предфильтр вызвал уведомление старта.');
 verify($pdo->query('SELECT body FROM messages')->fetchColumn() === 'Только ночная смена.', 'Исходник изменён предфильтром.');
 foreach ([
     'Разработка API, офис, страна, технология', 'Условия неизвестны', 'Не только ночная смена.',
@@ -151,9 +161,9 @@ try {
 $bad = ['{}', 'not-json', str_repeat('[', 17) . '0' . str_repeat(']', 17), "\xFF"];
 $bad[] = str_replace('"risks":[]', '"risks":{}', json_encode(syntheticResult(), JSON_THROW_ON_ERROR));
 foreach ([
-    'verdict' => 'execute', 'priority' => 'urgent', 'rationale' => str_repeat('я', AnalysisResult::RATIONALE_LIMIT + 1),
+    'verdict' => 'execute', 'priority' => 'urgent', 'rationale' => 123,
     'source_status' => 'verified', 'company' => "\u{2003}", 'pay' => "оплата\0", 'position' => "роль\u{0085}",
-    'matches' => array_fill(0, 5, 'лишнее'), 'missing' => ['ключ' => 'не список'], 'risks' => [null],
+    'matches' => 'не список', 'missing' => ['ключ' => 'не список'], 'risks' => [null],
 ] as $field => $value) {
     $data = syntheticResult();
     $data[$field] = $value;
@@ -172,21 +182,62 @@ foreach ($bad as $json) {
         verify($exception->category === 'invalid_output' && str_contains($exception->getMessage(), 'Не удалось'), 'Небезопасная диагностика.');
     }
 }
+$missingKey = syntheticResult();
+unset($missingKey['pay']);
+try {
+    $validator->validate(json_encode($missingKey, JSON_THROW_ON_ERROR));
+    throw new RuntimeException('Отсутствующий ключ принят.');
+} catch (AiException) {
+}
+foreach (["текст\u{202E}", "текст\u{200B}", '[ссылка](https://evil.example)', '<b>текст</b>', "текст\xFF"] as $unsafe) {
+    $json = str_replace('Подходящие задачи API.', $unsafe, json_encode(syntheticResult(), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+    try {
+        $validator->validate($json);
+        throw new RuntimeException('Опасный текст принят.');
+    } catch (AiException) {
+    }
+}
+$schema = AnalysisResult::jsonSchema();
+$encodedSchema = json_encode($schema, JSON_THROW_ON_ERROR);
+verify(!str_contains($encodedSchema, 'maxLength') && !str_contains($encodedSchema, 'maxItems'), 'Схема ограничивает подробность ответа.');
+verify($schema['additionalProperties'] === false && count($schema['required']) === 11
+    && $schema['properties']['priority']['enum'] === ['high', 'medium', 'low'], 'Схема потеряла строгую структуру.');
+$verbose = $validator->validate(json_encode(verboseResult(), JSON_THROW_ON_ERROR));
+verify(mb_strlen($verbose->rationale) >= 351 && count($verbose->matches) >= 5 && mb_strlen($verbose->risks[0]) >= 177, 'Не покрыты реальные превышения длины.');
+$small = syntheticResult();
+$small['rationale'] = str_repeat('я', 351);
+$small['matches'] = array_fill(0, 5, 'API');
+$small['risks'] = [str_repeat('р', 177)];
+$full = $formatter->format($validator->validate(json_encode($small, JSON_THROW_ON_ERROR)), 10);
+verify(!str_contains($full, 'сокращено') && str_contains($full, $small['rationale'])
+    && str_contains($full, implode('; ', $small['matches'])) && str_contains($full, $small['risks'][0]), 'Короткое уведомление зря сокращено.');
 foreach (['я', '界', '🧪'] as $character) {
-    $max = syntheticResult();
-    foreach (AnalysisResult::LIST_FIELDS as $key) {
-        $max[$key] = array_fill(0, AnalysisResult::LIST_LIMIT, str_repeat($character, AnalysisResult::LIST_ITEM_LIMIT));
+    $cases = [verboseResult()];
+    foreach ([...AnalysisResult::TEXT_FIELDS, ...AnalysisResult::LIST_FIELDS] as $field) {
+        $data = syntheticResult();
+        $data[$field] = in_array($field, AnalysisResult::LIST_FIELDS, true)
+            ? array_fill(0, 1000, str_repeat($character, 1000)) : str_repeat($character, 100000);
+        $cases[] = $data;
     }
-    foreach (AnalysisResult::TEXT_LIMITS as $key => $limit) {
-        $max[$key] = str_repeat($character, $limit);
+    $empty = verboseResult();
+    foreach (AnalysisResult::LIST_FIELDS as $field) {
+        $empty[$field] = [];
     }
+    $cases[] = $empty;
     $longUrl = 'https://example.org/' . str_repeat('x', VacancyResultFormatter::SOURCE_LIMIT - 20);
     $source = $formatter->sourceDescription(['body' => $longUrl]);
-    $bounded = $formatter->format($validator->validate(json_encode($max, JSON_THROW_ON_ERROR)), PHP_INT_MAX, source: $source);
-    verify(mb_strlen($bounded, 'UTF-8') <= 4096 && str_contains($bounded, $longUrl) && str_contains($bounded, 'Откликаться') && str_contains($bounded, $max['pay']) && str_contains($bounded, (string) PHP_INT_MAX), 'Максимальный результат потерял вердикт, условия или источник.');
-    verify(strlen(mb_convert_encoding($bounded, 'UTF-16LE', 'UTF-8')) <= 8192, 'Сообщение превысило консервативный бюджет Unicode.');
-    if ($character === '🧪') {
-        verify(str_contains($bounded, '(сокращено)'), 'Нет явного указания на сокращённые списки.');
+    foreach ($cases as $data) {
+        $result = $validator->validate(json_encode($data, JSON_THROW_ON_ERROR));
+        $bounded = $formatter->format($result, PHP_INT_MAX, source: $source);
+        verify($bounded === $formatter->format($result, PHP_INT_MAX, source: $source), 'Сокращение недетерминированно.');
+        verify(mb_check_encoding($bounded, 'UTF-8') && strlen(mb_convert_encoding($bounded, 'UTF-16LE', 'UTF-8')) <= 8192, 'Нарушен бюджет Unicode.');
+        foreach (['Откликаться', 'Приоритет: высокий', 'Компания:', 'Позиция:', 'Обоснование:', 'География и формат:', 'Оплата:', '(сокращено для Telegram)', $source, (string) PHP_INT_MAX] as $part) {
+            verify(str_contains($bounded, $part), 'Сокращение потеряло обязательную часть.');
+        }
+        foreach (['matches' => 'Совпадения:', 'risks' => 'Риски:', 'missing' => 'Уточнить:'] as $field => $label) {
+            verify($data[$field] === [] || str_contains($bounded, $label), 'Раздел исчез без указания.');
+        }
+        verify(json_decode($result->toJson(), true, flags: JSON_THROW_ON_ERROR) === $data, 'Представление изменило полный результат.');
     }
 }
 
@@ -345,5 +396,18 @@ verify(is_int($identifyExit) && is_int($profileLoad) && is_int($instructionsLoad
     'identify зависит от файлов либо run открывает хранилище до их проверки.');
 $builderSource = file_get_contents(dirname(__DIR__) . '/src/Analysis/EvaluationPromptBuilder.php');
 verify(is_string($builderSource) && !str_contains($builderSource, 'Оцени вакансию'), 'Старое задание осталось в PHP.');
+
+[$pdo, $ai, $telegram, $pipeline, $runner] = fixture();
+intake($runner, 1, 10, 'Искусственная вакансия API');
+$telegram->fail = true;
+$ai->beforeCall = static function () use ($pdo, $telegram): void {
+    verify(!$pdo->inTransaction() && count($telegram->texts) === 2, 'Сбой уведомления заблокировал старт ИИ.');
+    $telegram->fail = false;
+};
+$pipeline->processPending(100);
+$pipeline->processPending(1000);
+$job = $pdo->query('SELECT * FROM analysis_jobs')->fetch(PDO::FETCH_ASSOC);
+verify(count($ai->calls) === 1 && count($telegram->texts) === 3 && (int) $job['analysis_start_claimed'] === 1, 'Сбой старта повторил анализ или уведомление.');
+verify($job['delivery_status'] === 'delivered' && (int) $job['delivery_attempts'] === 1, 'Сбой старта повлиял на независимую итоговую доставку.');
 
 fwrite(STDOUT, "Проверка AI и сквозного отбора: OK\n");

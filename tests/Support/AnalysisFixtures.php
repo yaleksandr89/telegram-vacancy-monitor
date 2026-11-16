@@ -50,6 +50,24 @@ function syntheticResult(string $verdict = 'apply'): array
 }
 
 /**
+ * RU: Даёт подробный безопасный ответ, превышающий прежние ограничения полей.
+ * EN: Provides a verbose safe response exceeding the former field limits.
+ */
+function verboseResult(): array
+{
+    return array_replace(syntheticResult(), [
+        'company' => str_repeat('Компания 🧪 ', 40),
+        'position' => str_repeat('Разработка API 🧪 ', 40),
+        'rationale' => str_repeat('Подходящие задачи API 🧪. ', 50),
+        'geography' => str_repeat('Удалённо 🧪 ', 50),
+        'pay' => str_repeat('Оплата неизвестна 🧪 ', 50),
+        'matches' => array_fill(0, 12, str_repeat('Опыт API 🧪 ', 20)),
+        'risks' => [str_repeat('Условия требуют уточнения 🧪 ', 20)],
+        'missing' => array_fill(0, 12, 'Уточнить условия 🧪'),
+    ]);
+}
+
+/**
  * RU: Записывает запросы ИИ и возвращает искусственные ответы без сети.
  * EN: Records AI requests and returns synthetic responses without a network.
  */
@@ -99,6 +117,8 @@ final class FakeTelegram implements HttpTransport
         verify(str_ends_with($url, '/sendMessage'), 'Неожиданный метод в тестовом транспорте.');
         ($this->beforeSend ?? static fn () => null)();
         verify(!isset($request['parse_mode']), 'Уведомление должно быть обычным текстом.');
+        verify(mb_check_encoding($request['text'], 'UTF-8') && $request['text'] !== ''
+            && strlen(mb_convert_encoding($request['text'], 'UTF-16LE', 'UTF-8')) <= 8192, 'Исходящее сообщение нарушает бюджет Unicode.');
         verify(($request['link_preview_options']['is_disabled'] ?? false) === true, 'Предпросмотр ссылок не отключён.');
         $this->texts[] = $request['text'];
         if ($this->fail) {

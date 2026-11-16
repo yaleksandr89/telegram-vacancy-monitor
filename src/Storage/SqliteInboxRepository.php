@@ -38,9 +38,36 @@ final readonly class SqliteInboxRepository
      */
     public function applyUpdate(int $updateId, ?StoredMessage $message): bool
     {
+        return $this->persistUpdate($updateId, $message, false) ?? false;
+    }
+
+    /**
+     * RU: Независимые ID webhook не продвигают polling-курсор; null означает повтор самого update.
+     * EN: Independent webhook IDs do not advance the polling cursor; null denotes a replayed update.
+     */
+    public function applyWebhookUpdate(int $updateId, ?StoredMessage $message): ?bool
+    {
+        return $this->persistUpdate($updateId, $message, true);
+    }
+
+    private function persistUpdate(int $updateId, ?StoredMessage $message, bool $webhook): ?bool
+    {
         $this->pdo->beginTransaction();
 
         try {
+            if ($webhook) {
+                $receipt = $this->pdo->prepare('INSERT INTO received_updates (update_id) VALUES (:id) ON CONFLICT(update_id) DO NOTHING');
+                $receipt->execute(['id' => $updateId]);
+                if ($receipt->rowCount() === 0) {
+                    $existing = $this->pdo->prepare('SELECT update_id FROM received_updates WHERE update_id = :id');
+                    $existing->execute(['id' => $updateId]);
+                    if ($existing->fetchColumn() === false) {
+                        throw new RuntimeException('Не удалось сохранить ID webhook-обновления.');
+                    }
+                    $this->pdo->commit();
+                    return null;
+                }
+            }
             $inserted = false;
 
             if ($message !== null) {
@@ -73,16 +100,18 @@ final readonly class SqliteInboxRepository
                 }
             }
 
-            // RU: Нельзя продвигать курсор отдельно от сохранения сообщения.
-            // EN: Never advance the cursor independently of the stored message.
-            $statement = $this->pdo->prepare(<<<'SQL'
-                INSERT INTO cursor (name, next_offset)
-                VALUES ('main', :next_offset)
-                ON CONFLICT(name) DO UPDATE SET next_offset = MAX(next_offset, excluded.next_offset)
-                SQL);
-            $statement->execute(['next_offset' => $updateId + 1]);
-            if ($statement->rowCount() !== 1) {
-                throw new RuntimeException('Не удалось сохранить курсор обработки.');
+            if (!$webhook) {
+                // RU: Нельзя продвигать курсор отдельно от сохранения сообщения.
+                // EN: Never advance the cursor independently of the stored message.
+                $statement = $this->pdo->prepare(<<<'SQL'
+                    INSERT INTO cursor (name, next_offset)
+                    VALUES ('main', :next_offset)
+                    ON CONFLICT(name) DO UPDATE SET next_offset = MAX(next_offset, excluded.next_offset)
+                    SQL);
+                $statement->execute(['next_offset' => $updateId + 1]);
+                if ($statement->rowCount() !== 1) {
+                    throw new RuntimeException('Не удалось сохранить курсор обработки.');
+                }
             }
             $this->pdo->commit();
 

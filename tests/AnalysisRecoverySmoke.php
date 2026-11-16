@@ -19,6 +19,36 @@ require __DIR__ . '/Support/AnalysisFixtures.php';
 
 $profile = fixture()[5];
 
+foreach ([false, true] as $failDelivery) {
+    [$pdo, $ai, $telegram, $pipeline, $runner] = fixture();
+    $data = verboseResult();
+    $ai->responses = [new AiHttpResponse(200, json_encode([
+        'choices' => [['message' => ['content' => json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]]],
+    ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR))];
+    intake($runner, 1, 10, 'Искусственная вакансия API https://t.me/c/456/8', origin: 8);
+    $telegram->beforeSend = static function () use ($telegram, $failDelivery): void {
+        $telegram->fail = $failDelivery && count($telegram->texts) === 2;
+    };
+    $pipeline->processPending(100);
+    $job = $pdo->query('SELECT * FROM analysis_jobs')->fetch(PDO::FETCH_ASSOC);
+    $expected = array_replace($data, ['source_status' => 'verified_origin_ids']);
+    verify($job['analysis_status'] === 'completed' && (int) $job['analysis_attempts'] === 1 && $job['analysis_error'] === null, 'Подробный ответ вызвал ошибку или повтор анализа.');
+    verify(json_decode($job['result_json'], true, flags: JSON_THROW_ON_ERROR) === $expected, 'Полный результат не сохранён.');
+    $notification = $job['notification'];
+    verify(strlen(mb_convert_encoding($notification, 'UTF-16LE', 'UTF-8')) <= 8192
+        && str_contains($notification, '(сокращено для Telegram)') && str_contains($notification, 'https://t.me/c/456/8'), 'Сохранено неверное уведомление.');
+    verify(count($telegram->texts) === 3 && $telegram->texts[2] === $notification, 'Первая попытка не отправила ровно один итог после подтверждения и старта.');
+    $telegram->beforeSend = null;
+    $telegram->fail = false;
+    $pipeline->recover(110);
+    $pipeline->processPending(130);
+    $pipeline->processPending(10000);
+    $after = $pdo->query('SELECT * FROM analysis_jobs')->fetch(PDO::FETCH_ASSOC);
+    verify(count($ai->calls) === 1 && $after['delivery_status'] === 'delivered', 'Повтор доставки вызвал ИИ или не завершился.');
+    verify($after['notification'] === $notification && $after['result_json'] === $job['result_json'], 'Повтор изменил сохранённый итог.');
+    verify(array_slice($telegram->texts, 2) === array_fill(0, $failDelivery ? 2 : 1, $notification), 'Доставка разделила итог или повторила старт.');
+}
+
 foreach ([new AiException('timeout', true), new AiHttpResponse(429, 'secret-response'), new AiHttpResponse(503, 'secret-response')] as $failure) {
     [$pdo, $ai, $telegram, $pipeline, $runner] = fixture();
     $ai->responses = [$failure, $failure, $failure];
@@ -31,6 +61,7 @@ foreach ([new AiException('timeout', true), new AiHttpResponse(429, 'secret-resp
     $pipeline->processPending(10000);
     $job = $pdo->query('SELECT * FROM analysis_jobs')->fetch(PDO::FETCH_ASSOC);
     verify(count($ai->calls) === 3 && (int) $job['analysis_attempts'] === 3, 'Не три общие попытки.');
+    verify(count(array_filter($telegram->texts, static fn (string $text): bool => str_starts_with($text, 'Вакансия передана на анализ ИИ.'))) === 1, 'Повтор ИИ продублировал старт.');
     verify($job['analysis_status'] === 'failed' && $job['verdict'] === 'technical_failure' && $job['delivery_status'] === 'delivered', 'Технический результат потерян.');
     verify(str_contains(end($telegram->texts), 'Не удалось обработать') && !str_contains(json_encode($job), 'secret-response'), 'Нет технического уведомления или есть утечка.');
     verify((int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn() === 1, 'Удалён исходник.');
@@ -122,7 +153,7 @@ $jobs->begin(ProcessingStage::Delivery, 1, 130);
 $pipeline->recover(130);
 $telegram->fail = false;
 $pipeline->processPending(189);
-verify(count($telegram->texts) === 2, 'Отправка повторилась до сохранённой задержки.');
+verify(count($telegram->texts) === 3, 'Отправка повторилась до сохранённой задержки.');
 $pipeline->processPending(190);
 $job = $pdo->query('SELECT * FROM analysis_jobs')->fetch(PDO::FETCH_ASSOC);
 verify((int) $job['delivery_attempts'] === 3 && $job['delivery_status'] === 'delivered' && count($ai->calls) === 1, 'Восстановление прерванной доставки повторило AI или потеряло попытку.');
@@ -136,6 +167,7 @@ for ($attempt = 1; $attempt <= 3; ++$attempt) {
 $pipeline->processPending(10000);
 verify(count($ai->calls) === 0 && $pdo->query('SELECT analysis_status FROM analysis_jobs')->fetchColumn() === 'failed', 'Исчерпанные прерванные попытки потеряны.');
 verify(str_contains(end($telegram->texts), 'Не удалось обработать'), 'Нет уведомления об исчерпании после рестарта.');
+verify(count($telegram->texts) === 2, 'Исчерпанные попытки вызвали уведомление старта.');
 
 // RU: Явно создаём прежнюю схему, не открывая runtime-базу приложения.
 // EN: Recreate the prior schema explicitly, without opening any runtime database.
@@ -230,6 +262,7 @@ foreach ([1, 5] as $limit) {
 intake($runner, 1, 10, "Неверный UTF-8: \xFF");
 $pipeline->processPending(100);
 verify(count($ai->calls) === 0 && $pdo->query('SELECT analysis_status FROM analysis_jobs')->fetchColumn() === 'failed', 'Непригодный вход оставил задание незавершённым.');
+verify(count($telegram->texts) === 2 && (int) $pdo->query('SELECT analysis_start_claimed FROM analysis_jobs')->fetchColumn() === 0, 'Непригодный вход вызвал уведомление старта.');
 verify(str_contains(end($telegram->texts), 'Не удалось обработать'), 'Нет уведомления о непригодном входе.');
 
 [$pdo, $ai, $telegram, $pipeline, $runner] = fixture();
@@ -255,5 +288,59 @@ $restart->processPending(130);
 verify(count($ai->calls) === 1, 'Изменение профиля или инструкций повторило сохранённую оценку.');
 verify($pdo->query('SELECT result_json, profile_hash FROM analysis_jobs')->fetch(PDO::FETCH_ASSOC) === $savedResult, 'Изменена версия или содержимое сохранённого результата.');
 verify($pdo->query('SELECT delivery_status FROM analysis_jobs')->fetchColumn() === 'delivered', 'Готовый результат не доставлен после изменения задания.');
+
+// RU: Сбой после claim, но до отправки не должен разрешать вторую попытку уведомления.
+// EN: A crash after claim but before sending must not allow another notification attempt.
+[$pdo, $ai, $telegram, $pipeline, $runner, $profile, $jobs] = fixture();
+intake($runner, 1, 10, 'Искусственная вакансия API');
+$jobs->begin(ProcessingStage::Analysis, 1, 100, $profile->fingerprint);
+verify($jobs->claimAnalysisStart(1) && !$jobs->claimAnalysisStart(1), 'Claim не идемпотентен.');
+$pipeline->recover(100);
+$pipeline->processPending(130);
+verify(count($ai->calls) === 1 && count($telegram->texts) === 2, 'Рестарт повторил потерянное уведомление старта.');
+
+// RU: Сбой после уведомления, но до ИИ сохраняет claim и допускает только повтор анализа.
+// EN: A crash after notification but before AI preserves the claim and only retries analysis.
+[$pdo, $ai, $telegram, $pipeline, $runner] = fixture();
+intake($runner, 1, 10, 'Искусственная вакансия API');
+$ai->beforeCall = static function (): void {
+    throw new RuntimeException('Искусственное прерывание до ИИ.');
+};
+try {
+    $pipeline->processPending(100);
+    throw new LogicException('Прерывание не воспроизведено.');
+} catch (RuntimeException $exception) {
+    verify($exception->getMessage() === 'Искусственное прерывание до ИИ.', 'Неожиданная причина прерывания.');
+}
+$ai->beforeCall = null;
+$pipeline->recover(100);
+$pipeline->processPending(130);
+$pipeline->recover(140);
+$pipeline->processPending(10000);
+verify(count($ai->calls) === 1 && count($telegram->texts) === 3, 'Восстановление повторило старт или готовую оценку.');
+
+// RU: Воспроизводим предыдущую схему analysis_jobs только в памяти, сохраняя terminal записи.
+// EN: Reproduce the previous analysis_jobs schema in memory only, retaining terminal records.
+[$pdo, $ai, $telegram, $pipeline, $runner] = fixture();
+intake($runner, 1, 10, 'Искусственная вакансия API');
+$pipeline->processPending(100);
+intake($runner, 2, 11, 'Другая искусственная вакансия');
+$ai->responses = [new AiException('http_401', false)];
+$pipeline->processPending(100);
+$pdo->exec('ALTER TABLE analysis_jobs DROP COLUMN analysis_start_claimed');
+$beforeJobs = $pdo->query('SELECT * FROM analysis_jobs ORDER BY message_id')->fetchAll(PDO::FETCH_ASSOC);
+$beforeMessages = $pdo->query('SELECT * FROM messages ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+new SqliteSchema($pdo)->ensure();
+new SqliteSchema($pdo)->ensure();
+$afterJobs = $pdo->query('SELECT * FROM analysis_jobs ORDER BY message_id')->fetchAll(PDO::FETCH_ASSOC);
+foreach ($afterJobs as &$migratedJob) {
+    verify((int) $migratedJob['analysis_start_claimed'] === 0, 'Неверное значение добавленного поля.');
+    unset($migratedJob['analysis_start_claimed']);
+}
+unset($migratedJob);
+verify($afterJobs === $beforeJobs && $pdo->query('SELECT * FROM messages ORDER BY id')->fetchAll(PDO::FETCH_ASSOC) === $beforeMessages, 'Миграция изменила прежние записи.');
+$pipeline->recover(1000);
+$pipeline->processPending(1000);
+verify(count($ai->calls) === 2 && count($telegram->texts) === 6, 'Миграция повторно запланировала terminal записи.');
 
 fwrite(STDOUT, "Проверка восстановления анализа и доставки: OK\n");
