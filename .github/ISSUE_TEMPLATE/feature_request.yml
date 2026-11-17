@@ -1,0 +1,25 @@
+name: Предложение возможности
+description: Задача пользователя и желаемое поведение приложения.
+body:
+  - type: markdown
+    attributes:
+      value: "Это форма продуктового предложения. Уязвимости направляйте по [политике безопасности](https://github.com/yaleksandr89/telegram-vacancy-monitor/security/policy). Не включайте секреты и персональные данные."
+  - type: textarea
+    id: problem
+    attributes:
+      label: Задача или проблема
+      description: В каком сценарии нужна эта возможность?
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Желаемый результат
+      description: Как должно вести себя приложение?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы (необязательно)
+      description: Какие другие способы решения вы рассматривали?
