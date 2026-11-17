@@ -1,12 +1,17 @@
+import errno
 import hashlib
 import json
 import os
 from pathlib import Path
+import pty
+import select
 import shutil
 import signal
 import subprocess
 import sys
 import tempfile
+import termios
+import time
 import unittest
 
 ROOT, PHP = Path(sys.argv[1]), sys.argv[2]
@@ -64,7 +69,9 @@ if any(x.endswith('/bin/bot.php') for x in sys.argv):
         queue.write_text('\\n'.join(lines)+'\\n')
         sys.exit(int(os.environ.get('BOT_EXIT', '0')))
     if os.environ.get('WAIT') == '1':
-        Path(os.environ['PIDFILE']).write_text(str(os.getpid()))
+        ready = Path(os.environ['PIDFILE'])
+        ready.with_suffix('.tmp').write_text(str(os.getpid()))
+        ready.with_suffix('.tmp').replace(ready)
         while True: time.sleep(1)
     if os.environ.get('BOT_STREAM') == '1':
         print('LIVE streaming', flush=True)
@@ -91,18 +98,109 @@ os.execv(os.environ['REAL_PHP'], [os.environ['REAL_PHP']]+sys.argv[1:])
     def private_hash(self):
         return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in (self.app / "config").rglob("*") if p.is_file()}
 
-    def launch(self, choices, status=0, prefix=""):
+    def launch(self, choices, status=0, interrupt=False):
         import shlex
         (self.base / "choices").write_text("\n".join(str(c) for c in choices)+"\n")
-        cmd = prefix + "bash " + shlex.quote(str(self.app / "bin/vacancy-monitor.sh"))
-        result = subprocess.run(["script", "--quiet", "--return", "--command", cmd, "/dev/null"],
-                                env=self.env, cwd=self.base, stdin=subprocess.DEVNULL,
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=15)
-        self.output = result.stdout.decode(errors="replace")
-        self.assertEqual(status, result.returncode, self.output[-2000:])
+        if interrupt:
+            returncode, output = self.interrupt_terminal()
+        else:
+            cmd = "bash " + shlex.quote(str(self.app / "bin/vacancy-monitor.sh"))
+            result = subprocess.run(["script", "--quiet", "--return", "--command", cmd, "/dev/null"],
+                                    env=self.env, cwd=self.base, stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=15)
+            returncode, output = result.returncode, result.stdout
+        self.output = output.decode(errors="replace")
+        self.assertEqual(status, returncode, self.output[-2000:])
         for marker in ["synthetic-secret-marker", "synthetic-key-marker", "private-marker", str(self.app)]:
             self.assertNotIn(marker, self.output)
         return self.output
+
+    def interrupt_terminal(self):
+        pid, terminal = pty.fork()
+        if pid == 0:
+            try:
+                # RU: Новый терминал моделирует запуск из интерактивной оболочки.
+                # EN: The new terminal models a launch from an interactive shell.
+                signal.signal(signal.SIGINT, signal.SIG_DFL)
+                os.chdir(self.base)
+                os.execvpe('bash', ['bash', str(self.app / 'bin/vacancy-monitor.sh')], self.env)
+            except BaseException:
+                os.write(2, 'Не удалось запустить UI в PTY.\n'.encode())
+                os._exit(127)
+        output = bytearray()
+        status = None
+        child = None
+
+        def diagnostic():
+            return (f'UI PID/PGID={pid}, child={child}, status={status}; '
+                    + output.decode(errors='replace')[-2000:])
+
+        def poll():
+            nonlocal status
+            if select.select([terminal], [], [], 0.02)[0]:
+                try:
+                    output.extend(os.read(terminal, 65536))
+                    del output[:-65536]
+                except OSError as error:
+                    if error.errno != errno.EIO:
+                        raise
+            if status is None:
+                waited, value = os.waitpid(pid, os.WNOHANG)
+                if waited:
+                    status = value
+
+        try:
+            deadline = time.monotonic() + 10
+            ready = self.base / 'pid'
+            while not ready.exists():
+                poll()
+                self.assertIsNone(status, 'UI завершился до готовности child: ' + diagnostic())
+                self.assertLess(time.monotonic(), deadline, 'Child не готов: ' + diagnostic())
+            child = int(ready.read_text())
+            self.assertIsNone(status, diagnostic())
+            self.assertEqual(pid, os.getsid(child), diagnostic())
+            self.assertEqual(pid, os.getpgid(child), diagnostic())
+            self.assertEqual(pid, os.tcgetpgrp(terminal), diagnostic())
+            attributes = termios.tcgetattr(terminal)
+            self.assertTrue(attributes[3] & termios.ISIG, diagnostic())
+            self.assertEqual(b'\x03', attributes[6][termios.VINTR], diagnostic())
+            os.write(terminal, b'\x03')
+            deadline = time.monotonic() + 5
+            while status is None:
+                poll()
+                self.assertLess(time.monotonic(), deadline, 'UI не завершился после Ctrl+C: ' + diagnostic())
+            self.assertEqual(130, os.waitstatus_to_exitcode(status), diagnostic())
+            deadline = time.monotonic() + 3
+            while True:
+                try:
+                    os.kill(child, 0)
+                except ProcessLookupError:
+                    break
+                self.assertLess(time.monotonic(), deadline, 'Child остался после Ctrl+C: ' + diagnostic())
+                poll()
+            return os.waitstatus_to_exitcode(status), bytes(output)
+        finally:
+            # RU: Очищаем только отдельную группу теста, в том числе при провале проверки.
+            # EN: Clean only the isolated test group, including after a failed assertion.
+            try:
+                os.killpg(pid, signal.SIGINT)
+                deadline = time.monotonic() + 1
+                while time.monotonic() < deadline:
+                    poll()
+                    try:
+                        os.killpg(pid, 0)
+                    except ProcessLookupError:
+                        break
+                try:
+                    os.killpg(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            except ProcessLookupError:
+                pass
+            finally:
+                if status is None:
+                    os.waitpid(pid, 0)
+                os.close(terminal)
 
     def test_help_and_languages(self):
         out = self.launch([4, 1, 1, 2, 1, 3, 1, 4, 1, 5, 2, 5, 2, 4, 1, 2, 6])
@@ -239,7 +337,7 @@ os.execv(os.environ['REAL_PHP'], [os.environ['REAL_PHP']]+sys.argv[1:])
 
     def test_ctrl_c(self):
         self.env["WAIT"] = "1"
-        self.launch([1], 130, "timeout --preserve-status --signal=INT --kill-after=3 2 ")
+        self.launch([1], 130, interrupt=True)
         pid = int((self.base / "pid").read_text())
         with self.assertRaises(ProcessLookupError):
             os.kill(pid, 0)
