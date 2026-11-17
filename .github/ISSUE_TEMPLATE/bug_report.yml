@@ -1,0 +1,45 @@
+name: Сообщить об ошибке
+description: Сообщение об ошибке в приложении или документации.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Перед публикацией логов и скриншотов удалите секреты и персональные данные.
+        Об уязвимостях сообщайте через [политику безопасности](https://github.com/yaleksandr89/telegram-vacancy-monitor/security/policy).
+  - type: dropdown
+    id: category
+    attributes:
+      label: Область ошибки
+      options:
+        - Локальный запуск (Linux)
+        - Локальный запуск (Windows)
+        - Локальный запуск (macOS)
+        - Серверный режим
+        - AI-анализ
+        - Документация
+        - Другое
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Описание ошибки
+      description: Что произошло и какого результата вы ожидали?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Шаги воспроизведения
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Окружение и версия
+      description: Операционная система, способ запуска, версия приложения или commit.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Логи и дополнительные сведения (необязательно)
+      render: text

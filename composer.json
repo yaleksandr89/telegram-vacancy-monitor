@@ -2,6 +2,7 @@
     "name": "yaleksandr89/telegram-vacancy-monitor",
     "description": "Консольное PHP-приложение для мониторинга Telegram-каналов с вакансиями.",
     "type": "project",
+    "license": "MIT",
     "keywords": [
         "telegram",
         "vacancies",

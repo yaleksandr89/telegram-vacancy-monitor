@@ -1,0 +1,21 @@
+name: Предложить улучшение
+description: Предложение новой возможности или изменения поведения.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Задача или проблема
+      description: Какую задачу должно решать улучшение?
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Ожидаемый результат
+      description: Как должно работать предлагаемое решение?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативные варианты (необязательно)
