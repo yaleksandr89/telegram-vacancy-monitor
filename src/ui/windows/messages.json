@@ -1,0 +1,330 @@
+{
+  "title": [
+    "Монитор вакансий",
+    "Vacancy monitor"
+  ],
+  "welcome": [
+    "Перешлите вакансии своему боту в Телеграмме.\nВыберите действие ниже.",
+    "Forward vacancies to your bot in Telegram.\nChoose an action below."
+  ],
+  "run": [
+    "Запустить мониторинг",
+    "Start monitoring"
+  ],
+  "check": [
+    "Проверить готовность",
+    "Check readiness"
+  ],
+  "identify": [
+    "Узнать Telegram User ID",
+    "Find Telegram User ID"
+  ],
+  "help": [
+    "Справка",
+    "Help"
+  ],
+  "language": [
+    "Язык",
+    "Language"
+  ],
+  "exit": [
+    "Выход",
+    "Exit"
+  ],
+  "back": [
+    "Назад",
+    "Back"
+  ],
+  "main": [
+    "Главное меню",
+    "Main menu"
+  ],
+  "next": [
+    "Следующее действие · ↑/↓, Enter · Esc назад · Ctrl+C выход",
+    "Next action · ↑/↓, Enter · Esc back · Ctrl+C exit"
+  ],
+  "bye": [
+    "До свидания.",
+    "Goodbye."
+  ],
+  "ru": [
+    "Русский",
+    "Русский"
+  ],
+  "en": [
+    "English",
+    "English"
+  ],
+  "language_note": [
+    "Язык меню действует до закрытия приложения.\nПри следующем запуске — русский. Язык ответов ИИ задаётся отдельно.",
+    "The menu language lasts until the app closes.\nNext launch defaults to Russian. AI response language is configured separately."
+  ],
+  "gum_missing": [
+    "Gum приложения недоступен. Проверьте целостность распакованного архива.",
+    "App Gum is unavailable. Check the extracted archive for missing files."
+  ],
+  "menu_error": [
+    "Не удалось открыть меню или получен неизвестный выбор.",
+    "The menu failed or returned an unknown selection."
+  ],
+  "quick": [
+    "Быстрый старт",
+    "Quick start"
+  ],
+  "processing": [
+    "Обработка вакансий",
+    "Vacancy processing"
+  ],
+  "privacy": [
+    "Настройки и приватность",
+    "Configuration and privacy"
+  ],
+  "model": [
+    "Локальная модель и подключение",
+    "Local model and connection"
+  ],
+  "vds": [
+    "VDS и устранение проблем",
+    "VDS and troubleshooting"
+  ],
+  "help_intro": [
+    "## С чего начать?\nВыберите тему. В каждой теме есть возврат к списку и в главное меню.",
+    "## Where to start?\nChoose a topic. Each topic offers a return to this list or the main menu."
+  ],
+  "help_quick": [
+    "## Быстрый старт\n- Распакуйте архив для вашей ОС в доступную для записи папку.\n- Создайте `config/bot.ini` по `config/bot.example.ini`.\n- Впишите токен бота; отправьте ему `/start`.\n- Узнайте ID через меню и укажите разрешённого пользователя в INI.\n- Подготовьте два приватных Markdown-файла профиля.\n- Выполните проверку готовности, затем запустите мониторинг.\n\nПодробности: `docs/guides/local-gum.md`.",
+    "## Quick start\n- Extract the archive for your OS into a writable folder.\n- Create `config/bot.ini` from `config/bot.example.ini`.\n- Set the bot token; send `/start` to the bot.\n- Find your ID using the menu and set the allowed user in the INI.\n- Prepare the two private Markdown profile files.\n- Check readiness, then start monitoring.\n\nDetails: `docs/guides/local-gum.md`."
+  ],
+  "help_processing": [
+    "## Обработка вакансий\n- Отправляйте или пересылайте боту текст в личном чате.\n- Принимаются сообщения только разрешённого пользователя.\n- Бот сохраняет вакансию в SQLite и выполняет настроенный AI-анализ.\n- История произвольных каналов автоматически не собирается.\n- Для остановки мониторинга и приложения нажмите Ctrl+C.\n\nНе запускайте два polling-процесса одного бота.",
+    "## Vacancy processing\n- Send or forward vacancy text in a private chat with the bot.\n- Only the configured allowed user can submit messages.\n- The bot stores the vacancy in SQLite and runs configured AI analysis.\n- It does not automatically collect arbitrary channel history.\n- Press Ctrl+C to stop monitoring and close the app.\n\nDo not run two polling processes for the same bot."
+  ],
+  "help_privacy": [
+    "## Настройки и приватность\n- Приватные настройки: `config/bot.ini`.\n- Приватный профиль: `config/profile/local/candidate.md`.\n- Приватные инструкции: `config/profile/local/instructions.md`.\n- Данные и состояние: `var/` внутри распакованной папки.\n- Эти файлы создаёте вы; их нет в публичном архиве.\n- `runtime/` содержит публичные компоненты исполнения.\n\nВ режиме `cloud` вакансия, профиль и инструкции уходят выбранному\nAI-сервису. Меню не показывает ключи и содержимое профиля.",
+    "## Configuration and privacy\n- Private settings: `config/bot.ini`.\n- Private profile: `config/profile/local/candidate.md`.\n- Private instructions: `config/profile/local/instructions.md`.\n- Data and processing state: `var/` in the extracted folder.\n- You create these files; they are absent from the public archive.\n- `runtime/` contains public runtime components.\n\nIn `cloud` mode, vacancy text, profile and instructions are sent to the\nchosen AI service. Menus do not display keys or profile contents."
+  ],
+  "help_model": [
+    "## Локальная модель и подключение\n- Запустите свой OpenAI-совместимый сервер модели отдельно.\n- Укажите `AI_PROVIDER_LOCATION=\"local\"`.\n- Задайте `AI_BASE_URL`, например `http://127.0.0.1:1234/v1`.\n- Задайте `AI_MODEL` и ключ, если сервер его требует.\n- Проверьте модель и совместимость сервера по его документации.\n\nПроверка готовности работает без сети и не проверяет соединение.\nПриложение не устанавливает модель и не открывает сетевые порты.",
+    "## Local model and connection\n- Start your OpenAI-compatible model server separately.\n- Set `AI_PROVIDER_LOCATION=\"local\"`.\n- Set `AI_BASE_URL`, for example `http://127.0.0.1:1234/v1`.\n- Set `AI_MODEL` and a key if required by the server.\n- Check the model and server compatibility using its documentation.\n\nReadiness is offline and does not test connections.\nThe app does not install models or open network ports."
+  ],
+  "help_vds": [
+    "## VDS и устранение проблем\n- Локальный мониторинг использует `polling` и `getUpdates`.\n- При активном webhook команды запуска и поиска ID недоступны.\n- Регистрацией и снятием webhook управляет владелец.\n- Меню не переключает режим и не удаляет ожидающие обновления.\n- При ошибке проверьте готовность и отсутствие второго процесса.\n\nДля сервера: `docs/guides/vds-webhook.md`.\nПубличная HTTP-точка в локальный архив не включена.",
+    "## VDS and troubleshooting\n- Local monitoring uses `polling` and `getUpdates`.\n- An active webhook blocks monitoring and ID lookup.\n- The owner registers and removes the webhook.\n- Menus do not switch modes or discard pending updates.\n- On failure, check readiness and ensure no other instance is running.\n\nServer guide: `docs/guides/vds-webhook.md`.\nThe public HTTP entry point is excluded from local archives."
+  ],
+  "details": [
+    "Подробнее",
+    "Details"
+  ],
+  "repeat": [
+    "Повторить проверку",
+    "Repeat check"
+  ],
+  "check_now": [
+    "Проверить сейчас",
+    "Check now"
+  ],
+  "again": [
+    "Запустить снова",
+    "Start again"
+  ],
+  "ready": [
+    "Локальные предпосылки готовы",
+    "Local prerequisites ready"
+  ],
+  "not_ready": [
+    "Подготовка не завершена",
+    "Setup incomplete"
+  ],
+  "ok": [
+    "OK",
+    "OK"
+  ],
+  "fail": [
+    "НЕ ГОТОВО",
+    "NOT READY"
+  ],
+  "skip": [
+    "НЕ ПРОВЕРЕНО",
+    "NOT CHECKED"
+  ],
+  "optional": [
+    "ДОПУСТИМО",
+    "ACCEPTABLE"
+  ],
+  "group_runtime": [
+    "Среда исполнения",
+    "Runtime"
+  ],
+  "group_config": [
+    "Настройки",
+    "Config"
+  ],
+  "group_profile": [
+    "Профиль",
+    "Profile"
+  ],
+  "group_storage": [
+    "Хранилище",
+    "Storage"
+  ],
+  "checks_note": [
+    "Сеть, ключи на сервере, содержимое профиля, активная блокировка\nи запись SQLite не проверялись. Файлы не изменялись.",
+    "Network, server credentials, profile content, active locks and SQLite\nwrites were not tested. No files were changed."
+  ],
+  "details_intro": [
+    "## Подробности\nВыберите категорию проверки.",
+    "## Details\nChoose a check category."
+  ],
+  "php": [
+    "PHP CLI: диапазон Composer ^8.5",
+    "PHP CLI: Composer ^8.5 range"
+  ],
+  "extensions": [
+    "curl, json, mbstring, PDO, pdo_sqlite",
+    "curl, json, mbstring, PDO, pdo_sqlite"
+  ],
+  "autoload": [
+    "Production autoload",
+    "Production autoload"
+  ],
+  "ini": [
+    "Чтение и формат config/bot.ini",
+    "config/bot.ini readability and syntax"
+  ],
+  "mode": [
+    "Режим приёма и параметры webhook",
+    "Receive mode and webhook settings"
+  ],
+  "polling": [
+    "Доступность локального polling",
+    "Local polling availability"
+  ],
+  "token": [
+    "Формат токена бота",
+    "Bot token format"
+  ],
+  "user": [
+    "Формат ID пользователя",
+    "User ID format"
+  ],
+  "limits": [
+    "Лимиты попыток и ожидания ИИ",
+    "AI attempt and timeout limits"
+  ],
+  "ai": [
+    "Формат параметров подключения ИИ",
+    "AI connection settings format"
+  ],
+  "prefilter": [
+    "Формат правил предфильтра",
+    "Prefilter rules format"
+  ],
+  "candidate": [
+    "candidate.md: доступен, непустой, до 32 КиБ",
+    "candidate.md: readable, nonempty, up to 32 KiB"
+  ],
+  "instructions": [
+    "instructions.md: доступен, непустой, до 32 КиБ",
+    "instructions.md: readable, nonempty, up to 32 KiB"
+  ],
+  "storage": [
+    "Доступ к var/ или возможность его создания; права существующих файлов",
+    "var/ access or ability to create it; existing file permissions"
+  ],
+  "runtime_invalid": [
+    "Среда PHP приложения неполна или устарела.\nПроверьте целостность архива и его соответствие вашей ОС.",
+    "App PHP is incomplete or outdated.\nCheck archive integrity and that it matches your OS."
+  ],
+  "config_invalid": [
+    "Проверьте config/bot.ini: формат INI, токен и режим приёма.\nЗначения настроек здесь не выводятся.",
+    "Check config/bot.ini: INI syntax, token and receive mode.\nSetting values are not displayed here."
+  ],
+  "webhook": [
+    "Выбран webhook. Локальные run и identify используют getUpdates.\nВладелец должен отдельно согласовать возврат к polling и снять webhook\nбез удаления ожидающих обновлений. См. справку о VDS.",
+    "Webhook mode is selected. Local run and identify use getUpdates.\nThe owner must arrange a switch to polling and remove the webhook\nwithout discarding pending updates. See VDS help."
+  ],
+  "identify_intro": [
+    "## Найти свой ID\nОтправьте `/start` вашему боту в личном чате, затем выберите\n«Проверить сейчас». Каждый выбор делает ровно один запрос.\nПри активном webhook поиск недоступен.",
+    "## Find your ID\nSend `/start` to your bot in a private chat, then choose\nCheck now. Each selection makes exactly one request.\nLookup is unavailable while a webhook is active."
+  ],
+  "identify_empty": [
+    "Сообщений `/start` пока нет.\nОтправьте `/start` своему боту и повторите проверку.",
+    "No `/start` messages are available yet.\nSend `/start` to your bot and check again."
+  ],
+  "identified": [
+    "Найдены ID отправителей `/start`.\nУкажите свой ID в TELEGRAM_ALLOWED_USER_ID. Эти ID видны только здесь:",
+    "Sender IDs from `/start` found.\nSet your ID in TELEGRAM_ALLOWED_USER_ID. These IDs are shown only here:"
+  ],
+  "identify_error": [
+    "Не удалось получить ID. Проверьте токен, соединение и отсутствие\nактивного webhook или другого polling-процесса. Повтор — только по выбору.",
+    "Could not get IDs. Check the token, connection and that no webhook\nor other polling process is active. Retry only when you choose."
+  ],
+  "starting": [
+    "Мониторинг работает на переднем плане.\nCtrl+C остановит дочерний процесс и завершит приложение (код 130).",
+    "Monitoring runs in the foreground.\nCtrl+C stops the child and closes the app (exit code 130)."
+  ],
+  "run_done": [
+    "Мониторинг завершён. Выберите следующее действие.",
+    "Monitoring finished. Choose the next action."
+  ],
+  "run_error": [
+    "Мониторинг завершился с ошибкой. Проверьте готовность, соединение\nи отсутствие другого процесса. Автоматического перезапуска нет.",
+    "Monitoring failed. Check readiness, connection and that no other\ninstance is running. There is no automatic restart."
+  ],
+  "next_ids": [
+    "Следующие ID",
+    "Next IDs"
+  ],
+  "prev_ids": [
+    "Предыдущие ID",
+    "Previous IDs"
+  ],
+  "php_bundle": [
+    "PHP CLI поставки: 8.5.12+ в ветке 8.5",
+    "Bundle PHP CLI: 8.5.12+ in the 8.5 branch"
+  ],
+  "exit_code": [
+    "Код завершения",
+    "Exit code"
+  ],
+  "diagnostic_unknown": [
+    "Причина не уточнена. Проверьте готовность, токен и соединение.",
+    "Reason unavailable. Check readiness, the token and connection."
+  ],
+  "diagnostic_runtime": [
+    "Не удалось подготовить запуск и безопасную диагностику.\nПроверьте runtime и доступность системного TEMP.",
+    "Could not prepare command execution and safe diagnostics.\nCheck the runtime and system TEMP access."
+  ],
+  "diagnostic_config": [
+    "Проверьте настройки и приватные файлы профиля через «Готовность».",
+    "Check settings and private profile files using Readiness."
+  ],
+  "diagnostic_conflict": [
+    "Проверьте другой polling-процесс, блокировку и активный webhook.",
+    "Check for another polling process, the lock and an active webhook."
+  ],
+  "diagnostic_auth": [
+    "Телеграмм отклонил авторизацию. Проверьте токен бота.",
+    "Telegram rejected authentication. Check the bot token."
+  ],
+  "diagnostic_access": [
+    "Боту недоступен указанный чат. Проверьте разрешённого пользователя.",
+    "The bot cannot access the chat. Check the allowed user."
+  ],
+  "diagnostic_rate": [
+    "Лимит запросов Телеграмма. Подождите перед ручным повтором.",
+    "Telegram request limit reached. Wait before retrying manually."
+  ],
+  "diagnostic_tls": [
+    "Ошибка TLS. Проверьте сертификаты, дату системы и HTTPS-соединение.",
+    "TLS failed. Check certificates, the system date and HTTPS connection."
+  ],
+  "diagnostic_network": [
+    "Ошибка сети. Проверьте DNS, доступ к Телеграмму и соединение.",
+    "Network failed. Check DNS, Telegram access and the connection."
+  ],
+  "diagnostic_storage": [
+    "Недоступно хранилище. Проверьте права и свободное место.",
+    "Storage is unavailable. Check permissions and free space."
+  ]
+}

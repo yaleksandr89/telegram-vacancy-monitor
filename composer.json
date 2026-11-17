@@ -36,6 +36,23 @@
             "Yaleksandr\\TelegramVacancyMonitor\\Tests\\": "tests/"
         }
     },
+    "scripts": {
+        "test": [
+            "@php tests/InboxSmoke.php",
+            "@php tests/BotApiSmoke.php",
+            "@php tests/BotRunnerSmoke.php",
+            "@php tests/AiAnalysisSmoke.php",
+            "@php tests/AnalysisRecoverySmoke.php",
+            "@php tests/WebhookWorkerSmoke.php",
+            "@php tests/PlatformSmoke.php"
+        ],
+        "lint": "@php tests/Lint.php",
+        "check": [
+            "@composer validate --no-check-publish",
+            "@lint",
+            "@test"
+        ]
+    },
     "config": {
         "sort-packages": true,
         "optimize-autoloader": true

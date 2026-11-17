@@ -1,0 +1,92 @@
+name: Standalone bundles
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: 'Цели сборки (полный выпуск требует all)'
+        required: true
+        type: choice
+        options:
+          - linux
+          - windows
+          - macos
+          - linux,windows
+          - linux,macos
+          - windows,macos
+          - all
+
+permissions:
+  contents: read
+
+env:
+  GIT_CONFIG_COUNT: '1'
+  GIT_CONFIG_KEY_0: core.autocrlf
+  GIT_CONFIG_VALUE_0: 'false'
+
+jobs:
+  select:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: select
+        name: Проверить выбранный набор
+        env:
+          SELECTED_TARGETS: ${{ inputs.targets }}
+        run: |
+          python3 - <<'PY'
+          import importlib.util, json, os, sys
+          sys.dont_write_bytecode = True
+          spec = importlib.util.spec_from_file_location('release', 'build/release.py')
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          runners = {'linux': 'ubuntu-24.04', 'windows': 'windows-2025', 'macos': 'macos-15'}
+          targets = module.selection(os.environ['SELECTED_TARGETS'])
+          matrix = {'include': [{'target': t, 'runner': runners[t]} for t in targets]}
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write('matrix=' + json.dumps(matrix) + '\n')
+          PY
+
+  build:
+    needs: select
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Build-time PHP (Windows/macOS)
+        if: matrix.target != 'linux'
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2.37.2
+        with:
+          php-version: '8.5'
+          tools: none
+          coverage: none
+          github-token: ''
+      - name: Подготовить, собрать и проверить native target
+        id: bundles
+        shell: bash
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+          SOURCE_SHA: ${{ github.sha }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then python build/ci/bootstrap.py "$BUILD_TARGET" --source-sha "$SOURCE_SHA"
+          else python3 build/ci/bootstrap.py "$BUILD_TARGET" --source-sha "$SOURCE_SHA"; fi
+      - name: Сохранить проверенные архив и sidecar в workflow run
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: standalone-${{ matrix.target }}-${{ github.sha }}
+          path: ${{ steps.bundles.outputs.artifact-path }}/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

@@ -14,8 +14,8 @@ use Yaleksandr\TelegramVacancyMonitor\Telegram\Exception\UnexpectedResponseExcep
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Http\HttpTransport;
 
 /**
- * EN: Typed gateway to the official Bot API; maps JSON into application DTOs.
  * RU: Типизированный шлюз к официальному Bot API; преобразует JSON в DTO приложения.
+ * EN: Typed gateway to the official Bot API; maps JSON into application DTOs.
  */
 final readonly class BotApiClient
 {
@@ -25,8 +25,8 @@ final readonly class BotApiClient
     ) {}
 
     /**
-     * EN: Returns updates in Bot API order without acknowledging them locally.
      * RU: Возвращает обновления в порядке Bot API без локального подтверждения обработки.
+     * EN: Returns updates in Bot API order without acknowledging them locally.
      *
      * @return list<Update>
      * @throws BotApiException
@@ -60,8 +60,8 @@ final readonly class BotApiClient
     }
 
     /**
-     * EN: Sends a plain-text confirmation and verifies the returned message object.
      * RU: Отправляет текстовое подтверждение и проверяет объект отправленного сообщения.
+     * EN: Sends a plain-text confirmation and verifies the returned message object.
      *
      * @throws BotApiException
      * @throws BotTransportException
@@ -72,6 +72,7 @@ final readonly class BotApiClient
         $result = $this->request('sendMessage', [
             'chat_id' => $message->chatId,
             'text' => $message->text,
+            'link_preview_options' => ['is_disabled' => true],
         ], 15);
 
         if (!is_array($result) || !is_int($result['message_id'] ?? null)) {
@@ -80,8 +81,8 @@ final readonly class BotApiClient
     }
 
     /**
-     * EN: This is the only method that builds token-bearing Bot API URLs.
      * RU: Только этот метод формирует URL Bot API, содержащие токен.
+     * EN: This is the only method that builds token-bearing Bot API URLs.
      *
      * @param array<string, mixed> $parameters
      * @throws BotApiException
