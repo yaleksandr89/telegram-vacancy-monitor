@@ -1,54 +1,45 @@
-name: Сообщение об ошибке
-description: Ошибка приложения или документации без секретов и личных данных.
+name: Сообщить об ошибке
+description: Сообщение об ошибке в приложении или документации.
 body:
   - type: markdown
     attributes:
-      value: "Об уязвимостях сообщайте по [политике безопасности](https://github.com/yaleksandr89/telegram-vacancy-monitor/security/policy). Используйте только искусственные данные."
+      value: |
+        Перед публикацией логов и скриншотов удалите секреты и персональные данные.
+        Об уязвимостях сообщайте через [политику безопасности](https://github.com/yaleksandr89/telegram-vacancy-monitor/security/policy).
   - type: dropdown
     id: category
     attributes:
       label: Область ошибки
       options:
-        - Локальный запуск / интерфейс Linux
-        - Локальный запуск / интерфейс Windows
-        - Локальный запуск / интерфейс macOS
-        - Webhook / CLI-воркер
-        - Обработка ИИ
+        - Локальный запуск (Linux)
+        - Локальный запуск (Windows)
+        - Локальный запуск (macOS)
+        - Серверный режим
+        - AI-анализ
         - Документация
-        - Другое / неизвестно
+        - Другое
     validations:
       required: true
   - type: textarea
     id: behavior
     attributes:
-      label: Ожидаемый и фактический результат
-      description: Что должно было произойти и что произошло?
+      label: Описание ошибки
+      description: Что произошло и какого результата вы ожидали?
     validations:
       required: true
   - type: textarea
     id: reproduction
     attributes:
       label: Шаги воспроизведения
-      description: Используйте искусственные вакансии и профили, без приватных файлов.
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
-      label: Среда и версия
-      description: ОС, способ запуска, версия PHP, версия приложения или commit. Неизвестные значения можно так и обозначить.
-    validations:
-      required: true
+      label: Окружение и версия
+      description: Операционная система, способ запуска, версия приложения или commit.
   - type: textarea
     id: logs
     attributes:
-      label: Обезличенные логи (необязательно)
-      description: Удалите токены, ключи, ID, личные пути и тексты частных сообщений.
+      label: Логи и дополнительные сведения (необязательно)
       render: text
-  - type: checkboxes
-    id: privacy
-    attributes:
-      label: Безопасность данных
-      options:
-        - label: Сообщение и вложения не содержат секретов и персональных данных.
-          required: true
