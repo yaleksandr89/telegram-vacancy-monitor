@@ -41,6 +41,7 @@
         "test": [
             "@php tests/InboxSmoke.php",
             "@php tests/BotApiSmoke.php",
+            "@php tests/WebhookManagementSmoke.php",
             "@php tests/BotRunnerSmoke.php",
             "@php tests/AiAnalysisSmoke.php",
             "@php tests/AnalysisRecoverySmoke.php",

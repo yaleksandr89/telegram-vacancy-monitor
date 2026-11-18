@@ -8,6 +8,7 @@ use JsonException;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Dto\GetUpdatesRequest;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Dto\SendMessageRequest;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Dto\Update;
+use Yaleksandr\TelegramVacancyMonitor\Telegram\Dto\WebhookInfo;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Exception\BotApiException;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Exception\BotTransportException;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Exception\UnexpectedResponseException;
@@ -80,6 +81,60 @@ final readonly class BotApiClient
         }
     }
 
+    public function setWebhook(string $url, #[\SensitiveParameter] string $secret): void
+    {
+        $result = $this->request('setWebhook', [
+            'url' => $url,
+            'secret_token' => $secret,
+            'allowed_updates' => ['message'],
+            'drop_pending_updates' => false,
+            'max_connections' => 1,
+        ], 15);
+
+        if ($result !== true) {
+            throw new UnexpectedResponseException('Bot API не подтвердил регистрацию webhook.');
+        }
+    }
+
+    public function getWebhookInfo(): WebhookInfo
+    {
+        $result = $this->request('getWebhookInfo', [], 15);
+
+        if (
+            !is_array($result)
+            || !is_string($result['url'] ?? null)
+            || !is_int($result['pending_update_count'] ?? null)
+            || $result['pending_update_count'] < 0
+        ) {
+            throw new UnexpectedResponseException('Bot API вернул некорректный статус webhook.');
+        }
+
+        $hasErrorDate = array_key_exists('last_error_date', $result);
+        $hasErrorMessage = array_key_exists('last_error_message', $result);
+        if (
+            ($hasErrorDate && (!is_int($result['last_error_date']) || $result['last_error_date'] < 0))
+            || ($hasErrorMessage && !is_string($result['last_error_message']))
+        ) {
+            throw new UnexpectedResponseException('Bot API вернул некорректные сведения об ошибке доставки webhook.');
+        }
+
+        return new WebhookInfo(
+            $result['url'] !== '',
+            $result['pending_update_count'],
+            $hasErrorDate || $hasErrorMessage,
+            $result['last_error_date'] ?? null,
+        );
+    }
+
+    public function deleteWebhook(): void
+    {
+        $result = $this->request('deleteWebhook', ['drop_pending_updates' => false], 15);
+
+        if ($result !== true) {
+            throw new UnexpectedResponseException('Bot API не подтвердил удаление webhook.');
+        }
+    }
+
     /**
      * RU: Только этот метод формирует URL Bot API, содержащие токен.
      * EN: This is the only method that builds token-bearing Bot API URLs.
@@ -92,7 +147,7 @@ final readonly class BotApiClient
     private function request(string $method, array $parameters, int $timeoutSeconds): mixed
     {
         try {
-            $body = json_encode($parameters, JSON_THROW_ON_ERROR);
+            $body = json_encode((object) $parameters, JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
             throw new UnexpectedResponseException('Не удалось сформировать JSON для Bot API.', previous: $exception);
         }
