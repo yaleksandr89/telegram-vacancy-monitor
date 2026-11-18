@@ -7,11 +7,11 @@
 
 Приложение для персонального отбора вакансий с помощью ИИ. Отправьте или перешлите вакансию боту в Телеграмме. Приложение сохранит её и пришлёт оценку с учётом вашего опыта, предпочтений и ограничений.
 
-Подходит тем, кто собирает предложения из разных источников и хочет быстрее решать, на какие стоит откликаться. Критерии задаются в [профиле кандидата](docs/examples/go-developer.md#профиль-кандидата) и [инструкциях оценки](docs/examples/go-developer.md#инструкции-оценки). Подключить можно локальную или облачную модель ИИ через интерфейс Chat Completions.
+Подходит тем, кто собирает предложения из разных источников и хочет быстрее решать, на какие стоит откликаться. Критерии задаются в профиле кандидата и инструкциях оценки. Примеры их оформления приведены в [руководстве](docs/examples/vacancy-analysis.md). Подключить можно локальную или облачную модель ИИ через интерфейс Chat Completions.
 
 ### Демонстрация
 
-<a href="docs/videos/standalone-demo.mp4">
+<a href="https://github.com/user-attachments/assets/afdc1b8d-c4bb-49d4-b82f-67436f11f69c">
   <img src="docs/images/standalone/05-demo-preview.png" width="460" alt="Демонстрация локального приложения на Windows">
 </a>
 
@@ -46,7 +46,7 @@ flowchart LR
 
 **Локальное приложение.** Скачайте архив для Linux x86_64, Windows x64 или macOS ARM64 со страницы [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases), распакуйте и запустите по [инструкции](docs/guides/local-gum.md). PHP и другие компоненты уже входят в архив. Меню отображает Gum, в Windows запуском управляет PowerShell.
 
-**Сервер.** Установите проект из исходников с PHP 8.5, настройте вебхук и обработку по расписанию согласно [серверному руководству](docs/guides/vds-webhook.md).
+**Сервер.** Для запуска нужны PHP 8.5 (CLI и PHP-FPM), Composer, расширения `curl`, `json`, `mbstring`, `PDO`, `pdo_sqlite`, HTTPS и cron. Данные хранятся в SQLite, отдельный сервер базы данных не требуется. Установка и настройка описаны в [серверном руководстве](docs/guides/vds-webhook.md).
 
 Затем настройте выбранную установку:
 
@@ -59,15 +59,17 @@ flowchart LR
 
 ## Примеры анализа
 
-[Go-разработчик](docs/examples/go-developer.md) — профиль, правила оценки и техническая вакансия. [Продуктовый аналитик](docs/examples/analyst.md) — отдельный профиль, требования к аналитическим навыкам и текст вакансии.
+- [Go-разработчик](docs/examples/go-developer.md) — профиль, правила оценки и техническая вакансия.
+- [Продуктовый аналитик](docs/examples/analyst.md) — профиль, требования к аналитическим навыкам и текст вакансии.
 
 ## Документация
 
 ### Запуск и настройка
 
-- [Локальное приложение](docs/guides/local-gum.md) — установка и запуск на Linux, Windows и macOS; [экраны интерфейса](docs/guides/local-interface.md).
+- [Локальное приложение](docs/guides/local-gum.md) — установка и запуск на Linux, Windows и macOS.
+- [Интерфейс приложения](docs/guides/local-interface.md) — главное меню, справка и проверка настроек.
 - [Серверный режим](docs/guides/vds-webhook.md) — настройка вебхука, PHP-FPM и cron.
-- [Telegram-бот](docs/guides/telegram-bot.md) — создание бота, определение ID и отправка вакансий.
+- [Telegram-бот](docs/guides/telegram-bot.md) — создание бота, определ ение ID и отправка вакансий.
 - [Модели ИИ](docs/guides/ai-models.md) — подключение локальной или облачной модели.
 - [Профиль кандидата](config/profile/README.md) — оформление профиля и правил оценки.
 
@@ -83,7 +85,6 @@ flowchart LR
 
 - Сообщить об ошибке или предложить улучшение — [GitHub Issues](https://github.com/yaleksandr89/telegram-vacancy-monitor/issues).
 - Обсудить использование приложения — [GitHub Discussions](https://github.com/yaleksandr89/telegram-vacancy-monitor/discussions).
-- Сообщить об уязвимости — [политика безопасности](.github/SECURITY.md).
 
 ---
 
