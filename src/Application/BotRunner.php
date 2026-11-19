@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Yaleksandr\TelegramVacancyMonitor\Application;
 
+use Closure;
 use InvalidArgumentException;
 use Throwable;
 use Yaleksandr\TelegramVacancyMonitor\Storage\SqliteInboxRepository;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\BotApiClient;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Dto\GetUpdatesRequest;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Dto\Update;
+use Yaleksandr\TelegramVacancyMonitor\Telegram\Exception\UnexpectedResponseException;
 
 /**
  * RU: Принимает разрешённые личные сообщения и сохраняет их до отправки подтверждения.
@@ -17,11 +19,19 @@ use Yaleksandr\TelegramVacancyMonitor\Telegram\Dto\Update;
  */
 final readonly class BotRunner
 {
+    /**
+     * @param BotApiClient $bot
+     * @param SqliteInboxRepository $inbox
+     * @param int $allowedUserId
+     * @param VacancyAnalysisPipeline|null $pipeline
+     * @param (Closure(): int)|null $clock
+     */
     public function __construct(
         private BotApiClient $bot,
         private SqliteInboxRepository $inbox,
         private int $allowedUserId,
         private ?VacancyAnalysisPipeline $pipeline = null,
+        private ?Closure $clock = null,
     ) {}
 
     /**
@@ -55,10 +65,27 @@ final readonly class BotRunner
         }
         $nextAt = $this->pipeline?->nextDueAt();
         $timeout = $nextAt === null ? 25 : max(1, min(25, $nextAt - time()));
-        $request = new GetUpdatesRequest($this->inbox->nextOffset(), $timeout);
+        $clock = $this->clock ?? time(...);
+        $offset = $this->inbox->pollingOffset($clock());
+        $updates = $this->bot->getUpdates(new GetUpdatesRequest($offset, $timeout));
 
-        foreach ($this->bot->getUpdates($request) as $update) {
-            $this->processUpdate($update);
+        // RU: Проверяем весь ответ до продвижения курсора, чтобы повторный запуск не подтвердил пропуск.
+        // EN: Check the complete response before advancing the cursor so a restart cannot acknowledge a skipped update.
+        $previousId = $offset;
+        foreach ($updates as $update) {
+            if ($update->id < $previousId) {
+                throw new UnexpectedResponseException(
+                    'Bot API вернул update_id ниже запрошенного offset или предыдущего ID в пакете. Курсор не продвинут.',
+                );
+            }
+            $previousId = $update->id;
+        }
+
+        $processor = new IncomingUpdateProcessor($this->bot, $this->inbox, $this->allowedUserId);
+        $rebase = $offset === 0;
+        foreach ($updates as $update) {
+            $processor->process($update, handledAt: $clock(), rebase: $rebase);
+            $rebase = false;
         }
     }
 

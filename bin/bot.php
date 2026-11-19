@@ -91,32 +91,30 @@ try {
     if ($mode === 'identify') {
         // RU: Команда настройки не подтверждает ожидающие обновления /start.
         // EN: This setup command does not acknowledge pending /start updates.
-        $found = false;
+        $lock = openRuntimeLock($root . '/var', acquire: true);
+        try {
+            $updates = $bot->getUpdates(new GetUpdatesRequest(0, 0));
+        } finally {
+            fclose($lock);
+        }
 
-        foreach ($bot->getUpdates(new GetUpdatesRequest(0, 0)) as $update) {
+        $ids = [];
+        foreach ($updates as $update) {
             $message = $update->message;
 
-            if (
-                $message === null
-                || $message->chatType !== 'private'
-                || $message->senderId === null
-                || $message->body === null
-                || !str_starts_with($message->body, '/start')
-            ) {
+            if ($message === null || !$message->isStartCommand()) {
                 continue;
             }
 
-            if ($identifyJson) {
-                $ids[] = $message->senderId;
-            } else {
+            $ids[] = $message->senderId;
+            if (!$identifyJson) {
                 printf("ID отправителя /start: %d\n", $message->senderId);
             }
-            $found = true;
         }
 
         if ($identifyJson) {
-            fwrite(STDOUT, json_encode(['status' => $found ? 'found' : 'empty', 'ids' => array_values(array_unique($ids ?? []))], JSON_THROW_ON_ERROR) . PHP_EOL);
-        } elseif (!$found) {
+            fwrite(STDOUT, json_encode(['status' => $ids === [] ? 'empty' : 'found', 'ids' => array_values(array_unique($ids))], JSON_THROW_ON_ERROR) . PHP_EOL);
+        } elseif ($ids === []) {
             fwrite(STDOUT, "Сообщений /start пока нет. Отправьте /start боту и повторите команду.\n");
         }
 
@@ -181,20 +179,8 @@ try {
         ProviderLocation::fromConfig($config['AI_PROVIDER_LOCATION'] ?? 'local'),
     );
 
-    // RU: База SQLite и блокировка процесса располагаются в локальном каталоге данных.
-    // EN: Both the SQLite database and process lock belong to this local runtime directory.
-    umask(0077);
     $runtime = $root . '/var';
-
-    if (!is_dir($runtime) && !mkdir($runtime, 0700, true) && !is_dir($runtime)) {
-        throw new StartupException('Не удалось создать приватный каталог var/.');
-    }
-
-    $lock = fopen($runtime . '/bot.lock', 'c');
-
-    if ($lock === false || ($mode === 'run' && !flock($lock, LOCK_EX | LOCK_NB))) {
-        throw new StartupException('Бот уже запущен либо недоступна блокировка var/bot.lock.');
-    }
+    $lock = openRuntimeLock($runtime, acquire: $mode === 'run');
 
     $pdo = new PDO('sqlite:' . $runtime . '/vacancies.sqlite');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -230,6 +216,9 @@ try {
         exit(1);
     }
     if ($identifyJson) {
+        if ($exception instanceof StartupException) {
+            fwrite(STDERR, 'Ошибка: ' . $exception->getMessage() . PHP_EOL);
+        }
         fwrite(STDOUT, "{\"status\":\"error\",\"ids\":[]}\n");
         exit(1);
     }
@@ -238,4 +227,24 @@ try {
     }
     fwrite(STDERR, 'Ошибка: ' . $exception->getMessage() . PHP_EOL);
     exit(1);
+}
+
+/** @return resource */
+function openRuntimeLock(string $runtime, bool $acquire)
+{
+    umask(0077);
+    if (!is_dir($runtime) && !@mkdir($runtime, 0700, true) && !is_dir($runtime)) {
+        throw new StartupException('Не удалось создать приватный каталог var/.');
+    }
+
+    $lock = @fopen($runtime . '/bot.lock', 'c');
+    if ($lock === false) {
+        throw new StartupException('Недоступна блокировка var/bot.lock.');
+    }
+    if ($acquire && !flock($lock, LOCK_EX | LOCK_NB)) {
+        fclose($lock);
+        throw new StartupException('Занята блокировка var/bot.lock.');
+    }
+
+    return $lock;
 }
