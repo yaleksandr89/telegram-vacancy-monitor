@@ -1,6 +1,6 @@
 # Локальное приложение
 
-Отправьте боту текст вакансии или перешлите объявление из чата либо канала. Приложение сохранит вакансию, оценит её по профилю и пришлёт результат в чат с ботом. Пока работает мониторинг, окно приложения должно оставаться открытым.
+Отправьте боту текст вакансии или перешлите объявление из чата либо канала. Приложение сохранит вакансию, оценит её по профилю и пришлёт результат. Пока работает мониторинг, окно приложения должно оставаться открытым.
 
 ## Выберите архив
 
@@ -59,7 +59,10 @@ cd telegram-vacancy-monitor
 Linux/macOS:
 
 ```bash
+# Создайте конфигурацию из образца, не заменяя существующий файл.
 cp -n config/bot.example.ini config/bot.ini
+
+# Подготовьте каталог профиля и скопируйте образец инструкций.
 mkdir -p config/profile/local
 cp -n config/profile/instructions.example.md config/profile/local/instructions.md
 ```
@@ -67,10 +70,13 @@ cp -n config/profile/instructions.example.md config/profile/local/instructions.m
 Windows PowerShell:
 
 ```powershell
+# Не перезаписывайте свою конфигурацию при повторной настройке.
 if (-not (Test-Path -LiteralPath .\config\bot.ini)) {
     Copy-Item -LiteralPath .\config\bot.example.ini -Destination .\config\bot.ini
 }
+# Подготовьте каталог для своих файлов профиля.
 New-Item -ItemType Directory -Path .\config\profile\local -Force | Out-Null
+# Скопируйте образец инструкций, если ещё нет своего файла.
 if (-not (Test-Path -LiteralPath .\config\profile\local\instructions.md)) {
     Copy-Item -LiteralPath .\config\profile\instructions.example.md -Destination .\config\profile\local\instructions.md
 }
@@ -79,9 +85,9 @@ if (-not (Test-Path -LiteralPath .\config\profile\local\instructions.md)) {
 Редактируйте `config/bot.ini` текстовым редактором. Не вводите секреты в команды терминала.
 
 1. Откройте [BotFather](https://t.me/BotFather), создайте бота командой `/newbot` и сохраните выданный токен в `TELEGRAM_BOT_TOKEN`.
-2. Откройте личный чат с ботом и отправьте отдельное текстовое сообщение `/start` (не пересылку и не `/start` с параметрами).
+2. Отправьте боту `/start` отдельным сообщением, без пересылки и дополнительного текста.
 3. В приложении выберите «Узнать Telegram User ID», затем «Проверить сейчас». Достаточно токена бота и режима `polling`; профиль и настройка ИИ ещё не нужны.
-4. Запишите числовой Telegram ID своего аккаунта в `TELEGRAM_ALLOWED_USER_ID`. Если отображается несколько ID, выберите свой.
+4. Запишите свой числовой Telegram ID в `TELEGRAM_ALLOWED_USER_ID`. Если найдено несколько ID и непонятно, какой ваш, не выбирайте наугад: см. [способ проверки в руководстве по боту](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/telegram-bot.md#узнайте-свой-id).
 5. Оставьте `TELEGRAM_RECEIVE_MODE = "polling"`.
 
 Поиск ID выполняется только по нажатию и не подтверждает ожидающие обновления. Команда `identify` использует общую неблокирующую блокировку `var/bot.lock`: при работающем мониторинге сначала остановите его, не удаляя файл блокировки. Если зарегистрирован webhook, сначала выполните [безопасное переключение на локальный режим](vds-webhook.md#переключение-режимов). Подробности есть в [онлайн-руководстве по боту](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/telegram-bot.md).
@@ -148,7 +154,7 @@ AI_REQUEST_TIMEOUT_SECONDS = "180"
 
 ## Если что-то не работает
 
-- **Нет ID:** отправьте отдельное `/start` нужному боту и нажмите «Проверить сейчас» ещё раз; проверьте токен, отсутствие активного webhook и занятой блокировки `var/bot.lock`.
+- **Нет ID:** отправьте боту `/start` и нажмите «Проверить сейчас» ещё раз; проверьте токен, отсутствие активного webhook и занятой блокировки `var/bot.lock`.
 - **Ошибка настроек:** проверьте `config/bot.ini`, оба файла профиля и раздел «Подробнее» в проверке готовности.
 - **Ошибка авторизации:** проверьте токен BotFather; после замены сохраните INI и перезапустите приложение.
 - **Ошибка сети или TLS:** проверьте доступ к Телеграмму, DNS, системную дату и сертификаты. Не отключайте проверку TLS.

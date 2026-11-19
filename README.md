@@ -15,7 +15,7 @@
   <img src="docs/images/standalone/05-demo-preview.png" width="460" alt="Демонстрация локального приложения на Windows">
 </a>
 
-*Windows · LM Studio · модель `qwen/qwen3.5-9b` · 1 мин 24 с. Нажмите на изображение, чтобы открыть запись.*
+*Windows · LM Studio · модель `qwen/qwen3.5-9b`. Нажмите на изображение, чтобы открыть запись.*
 
 ## Возможности
 
