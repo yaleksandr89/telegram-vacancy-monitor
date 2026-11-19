@@ -82,4 +82,34 @@ try {
     // RU: Некорректные ответы отличаются от отказов API.
 }
 
+foreach ([
+    [429, ['retry_after' => 120], 120],
+    [429, ['retry_after' => PHP_INT_MAX], PHP_INT_MAX],
+    [429, null, null],
+    [429, [], null],
+    [429, 'invalid', null],
+    [429, ['retry_after' => '120'], null],
+    [429, ['retry_after' => true], null],
+    [429, ['retry_after' => 0], null],
+    [429, ['retry_after' => -1], null],
+    [429, ['retry_after' => 1.5], null],
+    [503, ['retry_after' => 120], 120],
+] as [$status, $parameters, $expected]) {
+    $transport->responses[] = new HttpResponse($status, json_encode([
+        'ok' => false,
+        'error_code' => $status,
+        'description' => 'synthetic-private-provider-message',
+        ...($parameters === null ? [] : ['parameters' => $parameters]),
+    ], JSON_THROW_ON_ERROR));
+    try {
+        $bot->sendMessage(new SendMessageRequest(123, 'Сохранено.'));
+        throw new LogicException('Отказ отправки не обнаружен.');
+    } catch (BotApiException $exception) {
+        if ($exception->httpStatus !== $status || $exception->retryAfter !== $expected
+            || str_contains($exception->getMessage(), 'synthetic-private-provider-message')) {
+            throw new RuntimeException('Некорректный retry_after или утечка сообщения провайдера.');
+        }
+    }
+}
+
 fwrite(STDOUT, "Проверка Bot API DTO: OK\n");

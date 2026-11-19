@@ -292,6 +292,9 @@ class BuildBoundary(unittest.TestCase):
                     with zipfile.ZipFile(previous) as z:
                         prefix = 'telegram-vacancy-monitor/'
                         manifest = json.loads(z.read(prefix + 'SHA256SUMS.json'))
+                        project_license = (ROOT / 'LICENSE').read_bytes()
+                        self.assertEqual(project_license, z.read(prefix + 'LICENSE'))
+                        self.assertEqual(hashlib.sha256(project_license).hexdigest(), manifest['LICENSE'])
                         self.assertEqual(dll, z.read(prefix + 'runtime/php/vcruntime140.dll'))
                         self.assertEqual(pin['dll']['sha256'], manifest['runtime/php/vcruntime140.dll'])
                         record = json.loads(z.read(prefix + 'runtime/PROVENANCE.json'))['windows_crt']

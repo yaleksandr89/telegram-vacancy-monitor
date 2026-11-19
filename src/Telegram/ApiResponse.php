@@ -10,16 +10,16 @@ use Yaleksandr\TelegramVacancyMonitor\Telegram\Exception\UnexpectedResponseExcep
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Http\HttpResponse;
 
 /**
- * EN: Validates the common Bot API response envelope before mapping the result.
  * RU: Проверяет общий формат ответа Bot API перед преобразованием результата.
+ * EN: Validates the common Bot API response envelope before mapping the result.
  */
 final readonly class ApiResponse
 {
     private function __construct(public mixed $result) {}
 
     /**
-     * EN: Separates remote API rejections from invalid JSON and protocol errors.
      * RU: Отделяет отказ Bot API от некорректного JSON и ошибок протокола.
+     * EN: Separates remote API rejections from invalid JSON and protocol errors.
      *
      * @throws BotApiException
      * @throws UnexpectedResponseException
@@ -38,7 +38,12 @@ final readonly class ApiResponse
 
         if ($payload['ok'] !== true || $response->statusCode < 200 || $response->statusCode >= 300) {
             $apiCode = is_int($payload['error_code'] ?? null) ? $payload['error_code'] : null;
-            throw new BotApiException($response->statusCode, $apiCode);
+            $retryAfter = $payload['ok'] === false ? ($payload['parameters']['retry_after'] ?? null) : null;
+            throw new BotApiException(
+                $response->statusCode,
+                $apiCode,
+                is_int($retryAfter) && $retryAfter > 0 ? $retryAfter : null,
+            );
         }
 
         if (!array_key_exists('result', $payload)) {

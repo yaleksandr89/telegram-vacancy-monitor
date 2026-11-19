@@ -7,8 +7,8 @@ namespace Yaleksandr\TelegramVacancyMonitor\Telegram\Dto;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Exception\UnexpectedResponseException;
 
 /**
- * EN: Only the incoming message fields required by the vacancy inbox.
  * RU: Только поля входящего сообщения, необходимые для хранения вакансий.
+ * EN: Only the incoming message fields required by the vacancy inbox.
  */
 final readonly class IncomingMessage
 {
@@ -21,11 +21,17 @@ final readonly class IncomingMessage
         public string $originType,
         public ?int $originChatId,
         public ?int $originMessageId,
+        private bool $plainStartText = false,
     ) {}
 
+    public function isStartCommand(): bool
+    {
+        return $this->chatType === 'private' && $this->senderId !== null && $this->plainStartText;
+    }
+
     /**
-     * EN: Interpret optional forward metadata without inventing a missing source.
      * RU: Разбирает необязательные данные пересылки, не выдумывая отсутствующий источник.
+     * EN: Interpret optional forward metadata without inventing a missing source.
      *
      * @param array<string, mixed> $payload
      * @throws UnexpectedResponseException
@@ -56,6 +62,28 @@ final readonly class IncomingMessage
             originType: is_string($origin['type'] ?? null) ? $origin['type'] : 'direct',
             originChatId: $channel && is_int($origin['chat']['id'] ?? null) ? $origin['chat']['id'] : null,
             originMessageId: $channel && is_int($origin['message_id'] ?? null) ? $origin['message_id'] : null,
+            plainStartText: self::isPlainStartText($payload),
         );
+    }
+
+    /** @param array<string, mixed> $payload */
+    private static function isPlainStartText(array $payload): bool
+    {
+        if (
+            ($payload['text'] ?? null) !== '/start'
+            || array_key_exists('forward_origin', $payload)
+            || array_key_exists('caption', $payload)
+        ) {
+            return false;
+        }
+        if (!array_key_exists('entities', $payload)) {
+            return true;
+        }
+
+        $entities = $payload['entities'];
+        $command = $entities[0] ?? null;
+        return is_array($entities) && array_is_list($entities) && count($entities) === 1
+            && is_array($command) && ($command['type'] ?? null) === 'bot_command'
+            && ($command['offset'] ?? null) === 0 && ($command['length'] ?? null) === 6;
     }
 }

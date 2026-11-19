@@ -147,7 +147,14 @@ final readonly class VacancyAnalysisPipeline
                 $sent = true;
             } catch (BotApiException $exception) {
                 $code = $exception->apiCode ?? $exception->httpStatus;
-                $this->failure(ProcessingStage::Delivery, $job, 'telegram_' . $code, $code === 429 || ($code >= 500 && $code <= 599), $now + (int) ((hrtime(true) - $started) / 1e9));
+                $this->failure(
+                    ProcessingStage::Delivery,
+                    $job,
+                    'telegram_' . $code,
+                    $code === 429 || ($code >= 500 && $code <= 599),
+                    $now + (int) ((hrtime(true) - $started) / 1e9),
+                    $code === 429 ? $exception->retryAfter : null,
+                );
             } catch (BotTransportException | UnexpectedResponseException) {
                 $this->failure(ProcessingStage::Delivery, $job, 'telegram_transport_or_response', true, $now + (int) ((hrtime(true) - $started) / 1e9));
             }
@@ -160,13 +167,21 @@ final readonly class VacancyAnalysisPipeline
         return false;
     }
 
-    private function failure(ProcessingStage $stage, array $job, string $category, bool $retryable, int $now): void
-    {
+    private function failure(
+        ProcessingStage $stage,
+        array $job,
+        string $category,
+        bool $retryable,
+        int $now,
+        ?int $retryAfter = null,
+    ): void {
         $attempts = (int) $job[$stage->value . '_attempts'];
         $terminal = !$retryable || $attempts >= $this->maxAttempts;
+        $delay = max(min(300, 15 * (2 ** min($attempts, 4))), $retryAfter ?? 0);
+        $nextAt = $now > PHP_INT_MAX - $delay ? PHP_INT_MAX : $now + $delay;
         $this->jobs->fail(
             $stage, (int) $job['message_id'], $category, $terminal,
-            $now + min(300, 15 * (2 ** min($attempts, 4))),
+            $nextAt,
             $stage === ProcessingStage::Analysis && $terminal
                 ? $this->formatter->format(null, (int) $job['recipient_message_id'], source: $this->formatter->sourceDescription($job)) : null,
         );
