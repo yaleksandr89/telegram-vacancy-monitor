@@ -33,7 +33,7 @@ composer install
 Если `config/bot.ini` ещё не существует, скопируйте [образец](../../config/bot.example.ini). Редактируйте файл в редакторе, не вводя токены в команды.
 
 1. Создайте бота через [BotFather](https://t.me/BotFather), сохраните его токен в `TELEGRAM_BOT_TOKEN`.
-2. Пока выбран `polling` и webhook не зарегистрирован, отправьте боту `/start` и выполните `php bin/bot.php identify` без другого polling-процесса.
+2. Пока выбран `polling` и webhook не зарегистрирован, отправьте отдельное текстовое `/start` в личный чат бота и выполните `php bin/bot.php identify`. При занятой блокировке `var/bot.lock` сначала остановите другой polling-процесс.
 3. Укажите свой ID в `TELEGRAM_ALLOWED_USER_ID`.
 4. Подготовьте `config/profile/local/candidate.md` и `config/profile/local/instructions.md` по [руководству профиля](../../config/profile/README.md).
 5. Настройте `AI_PROVIDER_LOCATION`, `AI_BASE_URL`, `AI_MODEL` и при необходимости `AI_API_KEY`. Подключение и передачу данных описывает [руководство моделей](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/ai-models.md).
@@ -71,92 +71,37 @@ php bin/bot.php work-once
 
 ## Зарегистрируйте webhook
 
-Убедитесь, что HTTPS-адрес `/webhook.php` доступен для запросов Телеграмма. Запрос без секретного заголовка получает HTTP 403, а GET — HTTP 405.
+Убедитесь, что HTTPS-адрес `/webhook.php` доступен для запросов Телеграмма. Запрос без секретного заголовка получает HTTP 403, а GET — HTTP 405. До регистрации остановите любые процессы `run` и `identify` этого бота: одновременно использовать polling и webhook нельзя.
 
-Регистрацию и удаление выполняет владелец через Telegram Bot API. Параметры методов:
+В установке из исходников используйте штатные команды `php bin/bot.php webhook`. Они читают токен и, когда нужен, секрет из приватного `config/bot.ini`; вводить секреты в терминал не требуется.
 
-| Метод | Что передать и проверить |
+| Команда | Назначение |
 | --- | --- |
-| `setWebhook` | `url`: ваш HTTPS-адрес `/webhook.php`; `secret_token`: секрет из INI; `allowed_updates`: `["message"]`; `drop_pending_updates`: `false`; для небольшого потока сообщений можно `max_connections = 1` |
-| `getWebhookInfo` | Проверить `url`, `pending_update_count`, наличие `last_error_date` и `last_error_message` |
-| `deleteWebhook` | `drop_pending_updates = false`; затем через `getWebhookInfo` убедиться, что `url` пуст |
+| `php bin/bot.php webhook set <https-url>` | Регистрация webhook по заданному HTTPS-адресу; требует режима `webhook` и корректного секрета в INI |
+| `php bin/bot.php webhook info` | Состояние регистрации, число ожидающих обновлений и сведения о последней ошибке доставки |
+| `php bin/bot.php webhook delete` | Снятие регистрации без удаления ожидающих обновлений |
 
-Параметры описаны в официальной документации [setWebhook](https://core.telegram.org/bots/api#setwebhook), [getWebhookInfo](https://core.telegram.org/bots/api#getwebhookinfo) и [deleteWebhook](https://core.telegram.org/bots/api#deletewebhook).
+Реализация вызывает официальные методы [setWebhook](https://core.telegram.org/bots/api#setwebhook), [getWebhookInfo](https://core.telegram.org/bots/api#getwebhookinfo) и [deleteWebhook](https://core.telegram.org/bots/api#deletewebhook). При регистрации используются `allowed_updates=["message"]`, `drop_pending_updates=false` и `max_connections=1`. При удалении также используется `drop_pending_updates=false`.
 
 ### Управление вебхуком
 
-Для регистрации, проверки и удаления вебхука используйте небольшой PHP-скрипт. Токен бота и секрет будут прочитаны из `config/bot.ini`, их не нужно вводить в командную строку.
+После настройки `TELEGRAM_RECEIVE_MODE = "webhook"` и непустого `TELEGRAM_WEBHOOK_SECRET` выполните из корня серверной установки (замените адрес своим реальным публичным HTTPS-доменом):
 
-1. Перейдите в корень установленного приложения и убедитесь, что после запуска `work-once` существует каталог `var/`.
-2. Создайте файл `var/webhook-control.php`. Например, в терминале выполните `nano var/webhook-control.php`.
-3. Вставьте содержимое ниже. Укажите свой адрес в `$webhookUrl` и выберите метод в `$method`.
-4. Сохраните файл, затем выполните `php var/webhook-control.php`.
-5. Для проверки результата измените `$method` на `getWebhookInfo` и выполните команду ещё раз. Для удаления регистрации используйте `deleteWebhook`.
-
-| Значение `$method` | Действие |
-| --- | --- |
-| `setWebhook` | Зарегистрировать адрес и секрет вебхука |
-| `getWebhookInfo` | Проверить регистрацию и состояние доставки |
-| `deleteWebhook` | Удалить регистрацию без удаления ожидающих обновлений |
-
-Содержимое `var/webhook-control.php`:
-
-```php
-<?php
-declare(strict_types=1);
-
-ini_set('display_errors', '0');
-ini_set('log_errors', '0');
-try {
-    $method = 'getWebhookInfo';
-    $webhookUrl = 'https://bot.example.org/webhook.php';
-    $config = @parse_ini_file(__DIR__ . '/../config/bot.ini', false, INI_SCANNER_RAW);
-    if (!is_array($config) || !is_string($config['TELEGRAM_BOT_TOKEN'] ?? null)) {
-        throw new RuntimeException();
-    }
-    $parameters = match ($method) {
-        'setWebhook' => [
-            'url' => $webhookUrl,
-            'secret_token' => $config['TELEGRAM_WEBHOOK_SECRET'] ?? '',
-            'allowed_updates' => ['message'],
-            'drop_pending_updates' => false,
-            'max_connections' => 1,
-        ],
-        'deleteWebhook' => ['drop_pending_updates' => false],
-        'getWebhookInfo' => new stdClass(),
-        default => throw new RuntimeException(),
-    };
-    $curl = curl_init('https://api.telegram.org/bot' . $config['TELEGRAM_BOT_TOKEN'] . '/' . $method);
-    curl_setopt_array($curl, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => json_encode($parameters, JSON_THROW_ON_ERROR),
-        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_FOLLOWLOCATION => false,
-        CURLOPT_PROXY => '',
-        CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_SSL_VERIFYHOST => 2,
-    ]);
-    $body = curl_exec($curl);
-    $response = is_string($body) ? json_decode($body, true, flags: JSON_THROW_ON_ERROR) : null;
-    if (!is_array($response) || ($response['ok'] ?? false) !== true) {
-        throw new RuntimeException();
-    }
-    echo "Запрос выполнен.\n";
-    if ($method === 'getWebhookInfo') {
-        $info = $response['result'];
-        echo 'Адрес совпадает: ' . (($info['url'] ?? '') === $webhookUrl ? 'да' : 'нет') . "\n";
-        echo 'Webhook снят: ' . (($info['url'] ?? '') === '' ? 'да' : 'нет') . "\n";
-        echo 'Ожидают доставки: ' . (int) ($info['pending_update_count'] ?? 0) . "\n";
-        echo 'Есть сведения об ошибке: ' . (isset($info['last_error_date']) ? 'да' : 'нет') . "\n";
-    }
-} catch (Throwable) {
-    fwrite(STDERR, "Запрос не выполнен. Проверьте настройки, сеть и состояние Bot API.\n");
-    exit(1);
-}
+```bash
+php bin/bot.php webhook set 'https://bot.example.org/webhook.php'
+php bin/bot.php webhook info
 ```
+
+Адрес для `set` должен использовать публичное DNS-имя и HTTPS на порту 443, 80, 88 или 8443; учётные данные, query и fragment не допускаются. При успехе `set` выводит «Webhook зарегистрирован.». `info` подтверждает регистрацию, количество ожидающих обновлений и состояние ошибок, **но не выводит зарегистрированный URL и не сверяет его с введённым адресом**.
+
+После проверки можно включать cron. Для снятия регистрации используйте:
+
+```bash
+php bin/bot.php webhook delete
+php bin/bot.php webhook info
+```
+
+После `delete` ожидается «Webhook удалён. Ожидающие обновления сохранены.», а затем «Webhook не зарегистрирован.». `info` и `delete` требуют только корректного токена бота, поэтому доступны и при выбранном `polling`; SQLite, профиль и настройки ИИ для этих команд не нужны. Не создавайте временные PHP-скрипты с самостоятельными вызовами Bot API.
 
 ## Запустите обработку через cron
 
@@ -191,16 +136,16 @@ SQLite ожидает блокировку до 5 секунд. Ошибка с�
 
 ## Переключение режимов
 
-**С локального приложения на сервер:** остановите polling, перенесите приватные настройки, профиль и данные при остановленных процессах, подготовьте FPM и БД, выберите `webhook`, зарегистрируйте webhook, затем включите cron. Используйте одну актуальную копию данных.
+**С локального приложения на сервер:** остановите `run` и `identify`; при остановленных обработчиках сохраните и перенесите приватную конфигурацию, профиль и весь `var/`, включая SQLite. Подготовьте FPM и БД, выберите `TELEGRAM_RECEIVE_MODE = "webhook"`, задайте секрет и выполните `php bin/bot.php webhook set 'https://bot.example.org/webhook.php'` с реальным адресом вместо примера. Проверьте `webhook info`, затем включите cron. В каждый момент используйте одну актуальную копию данных и один способ приёма.
 
 **С сервера на локальный запуск:**
 
 1. Отключите cron и дождитесь завершения активного воркера.
-2. Выполните `deleteWebhook` с `drop_pending_updates = false`; проверьте пустой `url` через `getWebhookInfo`.
+2. Выполните `php bin/bot.php webhook delete` (команда сохраняет ожидающие обновления) и через `php bin/bot.php webhook info` убедитесь, что выведено «Webhook не зарегистрирован.».
 3. Дождитесь завершения входящих FPM-запросов и выключите публичный обработчик.
-4. Сохраните ту же БД и приватные файлы; при переносе скопируйте весь `var/`.
+4. При остановленных обработчиках сохраните ту же БД и приватные файлы; при переносе скопируйте весь `var/`.
 5. Задайте `TELEGRAM_RECEIVE_MODE = "polling"` и запустите локальное приложение или `php bin/bot.php run` из исходников.
 
-Не очищайте курсор, таблицу полученных обновлений или сообщения вручную. `run` и `identify` недоступны при выбранном `webhook`; само приложение не регистрирует и не удаляет webhook.
+Не очищайте курсор, таблицу полученных обновлений или сообщения вручную. При длительном простое polling самостоятельно сбрасывает недоверенный исходящий `offset` без удаления данных. `run` и `identify` недоступны при выбранном `webhook`; переключение значения в INI само по себе не регистрирует и не удаляет webhook: для этого нужны команды `webhook set` и `webhook delete`.
 
 При неполадках воспользуйтесь [локальными подсказками](local-gum.md#если-что-то-не-работает) или [расширенным руководством](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/troubleshooting.md).

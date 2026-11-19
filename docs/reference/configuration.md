@@ -10,23 +10,28 @@
 
 | Команда | Режим | Что требуется |
 | --- | --- | --- |
-| `php bin/bot.php identify` | `polling` | Токен бота; профиль и параметры ИИ не нужны |
+| `php bin/bot.php identify` | `polling` | Токен бота и свободная блокировка `var/bot.lock`; профиль, ID и параметры ИИ не нужны |
 | `php bin/bot.php run` | `polling` | Токен бота, Telegram ID пользователя, профиль, инструкции, настройки ИИ и доступ к хранилищу |
 | `php bin/bot.php work-once` | `webhook` | Токен бота, Telegram ID пользователя, секрет вебхука, профиль, инструкции, настройки ИИ и доступ к хранилищу |
+| `php bin/bot.php webhook set <https-url>` | Управление webhook | Токен бота, `TELEGRAM_RECEIVE_MODE=webhook`, корректный `TELEGRAM_WEBHOOK_SECRET` и публичный HTTPS-адрес |
+| `php bin/bot.php webhook info` | Управление webhook | Только токен бота; не требует ID, профиля, ИИ и выбранного режима приёма |
+| `php bin/bot.php webhook delete` | Управление webhook | Только токен бота; не требует ID, профиля, ИИ и выбранного режима приёма |
 | `public/webhook.php` через FPM | `webhook` | Токен бота, Telegram ID пользователя, секрет вебхука и уже подготовленная БД; ИИ и профиль в HTTP-запросе не загружаются |
 
-В локальном архиве команды `identify` и `run` вызываются через меню с комплектным PHP; системный PHP для него не нужен. `work-once` предназначена для серверной установки из исходников.
+Команда `webhook set` принимает HTTPS-адрес с публичным DNS-именем и портом 443, 80, 88 или 8443. URL с учётными данными, query или fragment отклоняется. `webhook info` показывает регистрацию, количество ожидающих обновлений и сведения о последней ошибке, **но не печатает зарегистрированный URL**. `webhook delete` сохраняет ожидающие обновления (`drop_pending_updates=false`). Эти команды не открывают SQLite и не меняют `config/bot.ini`; выбор режима сам по себе не регистрирует webhook.
+
+В локальном архиве команды `identify` и `run` вызываются через меню с комплектным PHP; системный PHP для него не нужен. `work-once` и управление webhook описаны для серверной установки из исходников. `identify` берёт неблокирующую блокировку до обращения к Bot API; при первой проверке может создать только приватный каталог `var/` и `bot.lock`.
 
 ## Телеграмм
 
 | Ключ | Назначение и допустимые значения | Обязательность и значение по умолчанию |
 | --- | --- | --- |
 | `TELEGRAM_BOT_TOKEN` | Токен созданного Telegram-бота, выданный BotFather в формате «цифры, двоеточие, буквы/цифры/`_`/`-`». Правильность формата не подтверждает действительность токена | Обязателен для всех обращений к боту; в образце пуст |
-| `TELEGRAM_ALLOWED_USER_ID` | Числовой ID аккаунта Telegram, от которого бот принимает вакансии и которому отправляет результат. Получить через `identify` или меню после `/start` | Обязателен для `run`, `work-once` и webhook; для `identify` не нужен; в образце пуст |
-| `TELEGRAM_RECEIVE_MODE` | `polling` — локальные `run`/`identify`; `webhook` — FPM и `work-once` | Необязателен; при отсутствии `polling` |
-| `TELEGRAM_WEBHOOK_SECRET` | Секретный токен, по которому сервер проверяет подлинность входящего запроса вебхука, 1–256 символов `A–Z`, `a–z`, `0–9`, `_`, `-`. Совпадает с `secret_token` в `setWebhook` | Обязателен только при `webhook`, включая `work-once`; в образце пуст |
+| `TELEGRAM_ALLOWED_USER_ID` | Числовой ID аккаунта Telegram, от которого бот принимает вакансии и которому отправляет результат. Получить через `identify` или меню после `/start` | Обязателен для `run`, `work-once` и приёма webhook; для `identify` и управления webhook не нужен; в образце пуст |
+| `TELEGRAM_RECEIVE_MODE` | `polling` — локальные `run`/`identify`; `webhook` — FPM, `work-once` и требование для `webhook set` | Необязателен; при отсутствии `polling` |
+| `TELEGRAM_WEBHOOK_SECRET` | Секретный токен, по которому сервер проверяет подлинность входящего запроса вебхука, 1–256 символов `A–Z`, `a–z`, `0–9`, `_`, `-`. Совпадает с `secret_token` при `webhook set` | Обязателен для приёма webhook, `work-once` и `webhook set`; для `webhook info/delete` не нужен; в образце пуст |
 
-Выбор `TELEGRAM_RECEIVE_MODE` сам не регистрирует и не удаляет webhook. Правила HTTP-проверки находятся в [`WebhookReceiver`](../../src/Application/WebhookReceiver.php), загрузка его настроек — в [`public/webhook.php`](../../public/webhook.php). Порядок переключения описан в [серверном руководстве](../guides/vds-webhook.md#переключение-режимов).
+Выбор `TELEGRAM_RECEIVE_MODE` сам не регистрирует и не удаляет webhook: для этого предусмотрены отдельные команды `webhook set/info/delete`. Правила HTTP-проверки находятся в [`WebhookReceiver`](../../src/Application/WebhookReceiver.php), загрузка его настроек — в [`public/webhook.php`](../../public/webhook.php). Порядок переключения описан в [серверном руководстве](../guides/vds-webhook.md#переключение-режимов).
 
 ## Подключение ИИ
 
@@ -88,6 +93,6 @@ AI_PREFILTER_AMBIGUITY_TERMS[] = "возможны исключения"
 | `config/profile/local/candidate.md` | Профиль кандидата, обязательный для обработки |
 | `config/profile/local/instructions.md` | Инструкции модели, обязательные для обработки |
 | `var/vacancies.sqlite` | Сообщения, результаты и очередь |
-| `var/bot.lock` | Общая блокировка polling и cron |
+| `var/bot.lock` | Общая блокировка `run`, `identify` и cron `work-once`; webhook-запросы используют транзакции SQLite |
 
 Ограничения Markdown-файлов — в [руководстве профиля](../../config/profile/README.md). Конфигурация, профиль и `var/` содержат приватные данные и исключены из Git; сохраняйте их при обновлении.
