@@ -15,6 +15,7 @@ use Yaleksandr\TelegramVacancyMonitor\Application\Exception\ConfigurationExcepti
 use Yaleksandr\TelegramVacancyMonitor\Application\Exception\StartupException;
 use Yaleksandr\TelegramVacancyMonitor\Application\VacancyAnalysisPipeline;
 use Yaleksandr\TelegramVacancyMonitor\Application\VacancyResultFormatter;
+use Yaleksandr\TelegramVacancyMonitor\Application\WebhookCommand;
 use Yaleksandr\TelegramVacancyMonitor\Storage\SqliteAnalysisRepository;
 use Yaleksandr\TelegramVacancyMonitor\Storage\SqliteInboxRepository;
 use Yaleksandr\TelegramVacancyMonitor\Storage\SqliteSchema;
@@ -30,13 +31,13 @@ if (PHP_SAPI !== 'cli') {
 $root = dirname(__DIR__);
 require $root . '/vendor/autoload.php';
 $identifyJson = ($argv[1] ?? null) === 'identify' && ($argv[2] ?? null) === '--json';
+$mode = $argv[1] ?? 'run';
 
 try {
-    $mode = $argv[1] ?? 'run';
-
-    if (!in_array($mode, ['identify', 'run', 'work-once'], true)) {
-        throw new ConfigurationException('Использование: php bin/bot.php identify|run|work-once');
+    if (!in_array($mode, ['identify', 'run', 'work-once', 'webhook'], true)) {
+        throw new ConfigurationException('Использование: php bin/bot.php identify|run|work-once|webhook');
     }
+    $webhookCommand = $mode === 'webhook' ? WebhookCommand::fromArguments(array_slice($argv, 2)) : null;
 
     $path = $root . '/config/bot.ini';
 
@@ -46,7 +47,7 @@ try {
         );
     }
 
-    $config = $identifyJson
+    $config = ($identifyJson || $webhookCommand !== null)
         ? @parse_ini_file($path, false, INI_SCANNER_RAW)
         : parse_ini_file($path, false, INI_SCANNER_RAW);
 
@@ -56,20 +57,22 @@ try {
         );
     }
 
-    $receiveMode = $config['TELEGRAM_RECEIVE_MODE'] ?? 'polling';
-    if (!in_array($receiveMode, ['polling', 'webhook'], true)) {
-        throw new ConfigurationException('Укажите TELEGRAM_RECEIVE_MODE: polling или webhook.');
-    }
-    if ($receiveMode === 'webhook') {
-        if ($mode !== 'work-once') {
-            throw new ConfigurationException('В режиме webhook используйте work-once. Для run/identify сначала снимите webhook методом deleteWebhook (drop_pending_updates=false), затем выберите polling.');
+    if ($webhookCommand === null) {
+        $receiveMode = $config['TELEGRAM_RECEIVE_MODE'] ?? 'polling';
+        if (!in_array($receiveMode, ['polling', 'webhook'], true)) {
+            throw new ConfigurationException('Укажите TELEGRAM_RECEIVE_MODE: polling или webhook.');
         }
-        $secret = $config['TELEGRAM_WEBHOOK_SECRET'] ?? null;
-        if (!is_string($secret) || preg_match('/\A[A-Za-z0-9_-]{1,256}\z/D', $secret) !== 1) {
-            throw new ConfigurationException('Укажите TELEGRAM_WEBHOOK_SECRET: 1–256 символов A–Z, a–z, 0–9, _ или -.');
+        if ($receiveMode === 'webhook') {
+            if ($mode !== 'work-once') {
+                throw new ConfigurationException('В режиме webhook используйте work-once. Для run/identify сначала снимите webhook методом deleteWebhook (drop_pending_updates=false), затем выберите polling.');
+            }
+            $secret = $config['TELEGRAM_WEBHOOK_SECRET'] ?? null;
+            if (!is_string($secret) || preg_match('/\A[A-Za-z0-9_-]{1,256}\z/D', $secret) !== 1) {
+                throw new ConfigurationException('Укажите TELEGRAM_WEBHOOK_SECRET: 1–256 символов A–Z, a–z, 0–9, _ или -.');
+            }
+        } elseif ($mode === 'work-once') {
+            throw new ConfigurationException('Команда work-once предназначена для TELEGRAM_RECEIVE_MODE=webhook.');
         }
-    } elseif ($mode === 'work-once') {
-        throw new ConfigurationException('Команда work-once предназначена для TELEGRAM_RECEIVE_MODE=webhook.');
     }
 
     $token = is_array($config) ? ($config['TELEGRAM_BOT_TOKEN'] ?? null) : null;
@@ -80,35 +83,38 @@ try {
 
     $bot = new BotApiClient($token, new CurlTransport());
 
+    if ($webhookCommand !== null) {
+        fwrite(STDOUT, $webhookCommand->execute($bot, $config) . PHP_EOL);
+        exit(0);
+    }
+
     if ($mode === 'identify') {
         // RU: Команда настройки не подтверждает ожидающие обновления /start.
         // EN: This setup command does not acknowledge pending /start updates.
-        $found = false;
+        $lock = openRuntimeLock($root . '/var', acquire: true);
+        try {
+            $updates = $bot->getUpdates(new GetUpdatesRequest(0, 0));
+        } finally {
+            fclose($lock);
+        }
 
-        foreach ($bot->getUpdates(new GetUpdatesRequest(0, 0)) as $update) {
+        $ids = [];
+        foreach ($updates as $update) {
             $message = $update->message;
 
-            if (
-                $message === null
-                || $message->chatType !== 'private'
-                || $message->senderId === null
-                || $message->body === null
-                || !str_starts_with($message->body, '/start')
-            ) {
+            if ($message === null || !$message->isStartCommand()) {
                 continue;
             }
 
-            if ($identifyJson) {
-                $ids[] = $message->senderId;
-            } else {
+            $ids[] = $message->senderId;
+            if (!$identifyJson) {
                 printf("ID отправителя /start: %d\n", $message->senderId);
             }
-            $found = true;
         }
 
         if ($identifyJson) {
-            fwrite(STDOUT, json_encode(['status' => $found ? 'found' : 'empty', 'ids' => array_values(array_unique($ids ?? []))], JSON_THROW_ON_ERROR) . PHP_EOL);
-        } elseif (!$found) {
+            fwrite(STDOUT, json_encode(['status' => $ids === [] ? 'empty' : 'found', 'ids' => array_values(array_unique($ids))], JSON_THROW_ON_ERROR) . PHP_EOL);
+        } elseif ($ids === []) {
             fwrite(STDOUT, "Сообщений /start пока нет. Отправьте /start боту и повторите команду.\n");
         }
 
@@ -173,20 +179,8 @@ try {
         ProviderLocation::fromConfig($config['AI_PROVIDER_LOCATION'] ?? 'local'),
     );
 
-    // RU: База SQLite и блокировка процесса располагаются в локальном каталоге данных.
-    // EN: Both the SQLite database and process lock belong to this local runtime directory.
-    umask(0077);
     $runtime = $root . '/var';
-
-    if (!is_dir($runtime) && !mkdir($runtime, 0700, true) && !is_dir($runtime)) {
-        throw new StartupException('Не удалось создать приватный каталог var/.');
-    }
-
-    $lock = fopen($runtime . '/bot.lock', 'c');
-
-    if ($lock === false || ($mode === 'run' && !flock($lock, LOCK_EX | LOCK_NB))) {
-        throw new StartupException('Бот уже запущен либо недоступна блокировка var/bot.lock.');
-    }
+    $lock = openRuntimeLock($runtime, acquire: $mode === 'run');
 
     $pdo = new PDO('sqlite:' . $runtime . '/vacancies.sqlite');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -214,7 +208,17 @@ try {
     fwrite(STDOUT, "Бот запущен. Перешлите ему сообщение. Для остановки нажмите Ctrl+C.\n");
     $runner->run();
 } catch (Throwable $exception) {
+    if ($mode === 'webhook') {
+        $message = $exception instanceof ConfigurationException || $exception instanceof StartupException
+            ? $exception->getMessage()
+            : 'Не удалось выполнить команду webhook. Проверьте конфигурацию и доступность Bot API.';
+        fwrite(STDERR, 'Ошибка: ' . $message . PHP_EOL);
+        exit(1);
+    }
     if ($identifyJson) {
+        if ($exception instanceof StartupException) {
+            fwrite(STDERR, 'Ошибка: ' . $exception->getMessage() . PHP_EOL);
+        }
         fwrite(STDOUT, "{\"status\":\"error\",\"ids\":[]}\n");
         exit(1);
     }
@@ -223,4 +227,24 @@ try {
     }
     fwrite(STDERR, 'Ошибка: ' . $exception->getMessage() . PHP_EOL);
     exit(1);
+}
+
+/** @return resource */
+function openRuntimeLock(string $runtime, bool $acquire)
+{
+    umask(0077);
+    if (!is_dir($runtime) && !@mkdir($runtime, 0700, true) && !is_dir($runtime)) {
+        throw new StartupException('Не удалось создать приватный каталог var/.');
+    }
+
+    $lock = @fopen($runtime . '/bot.lock', 'c');
+    if ($lock === false) {
+        throw new StartupException('Недоступна блокировка var/bot.lock.');
+    }
+    if ($acquire && !flock($lock, LOCK_EX | LOCK_NB)) {
+        fclose($lock);
+        throw new StartupException('Занята блокировка var/bot.lock.');
+    }
+
+    return $lock;
 }

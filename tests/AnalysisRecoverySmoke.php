@@ -14,6 +14,8 @@ use Yaleksandr\TelegramVacancyMonitor\Application\VacancyAnalysisPipeline;
 use Yaleksandr\TelegramVacancyMonitor\Application\VacancyResultFormatter;
 use Yaleksandr\TelegramVacancyMonitor\Storage\SqliteSchema;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\BotApiClient;
+use Yaleksandr\TelegramVacancyMonitor\Telegram\Http\HttpResponse;
+use Yaleksandr\TelegramVacancyMonitor\Telegram\Http\HttpTransport;
 
 require __DIR__ . '/Support/AnalysisFixtures.php';
 
@@ -47,6 +49,58 @@ foreach ([false, true] as $failDelivery) {
     verify(count($ai->calls) === 1 && $after['delivery_status'] === 'delivered', 'Повтор доставки вызвал ИИ или не завершился.');
     verify($after['notification'] === $notification && $after['result_json'] === $job['result_json'], 'Повтор изменил сохранённый итог.');
     verify(array_slice($telegram->texts, 2) === array_fill(0, $failDelivery ? 2 : 1, $notification), 'Доставка разделила итог или повторила старт.');
+}
+
+foreach ([
+    [429, ['retry_after' => 600], 700],
+    [429, ['retry_after' => 5], 130],
+    [429, null, 130],
+    [429, ['retry_after' => '600'], 130],
+    [503, ['retry_after' => 600], 130],
+    [429, ['retry_after' => PHP_INT_MAX], PHP_INT_MAX],
+] as [$status, $parameters, $dueAt]) {
+    [$pdo, $ai, , , $runner, $profile, $jobs] = fixture();
+    $transport = new class (new HttpResponse($status, json_encode([
+        'ok' => false, 'error_code' => $status,
+        ...($parameters === null ? [] : ['parameters' => $parameters]),
+    ], JSON_THROW_ON_ERROR))) implements HttpTransport {
+        public array $texts = [];
+
+        public function __construct(private readonly HttpResponse $failure) {}
+
+        public function postJson(string $url, string $json, int $timeoutSeconds): HttpResponse
+        {
+            verify(str_ends_with($url, '/sendMessage'), 'Вместо доставки вызван неожиданный метод Bot API.');
+            $this->texts[] = json_decode($json, true, flags: JSON_THROW_ON_ERROR)['text'];
+            return count($this->texts) === 2
+                ? $this->failure
+                : new HttpResponse(200, '{"ok":true,"result":{"message_id":20}}');
+        }
+    };
+    $makePipeline = static fn (): VacancyAnalysisPipeline => new VacancyAnalysisPipeline(
+        $jobs, $profile, new ConservativePrefilter(),
+        new OpenAiCompatibleEvaluator($ai, new AnalysisResultValidator(), testPrompt(), 'http://localhost/v1', 'synthetic'),
+        new VacancyResultFormatter(), new BotApiClient('123:synthetic', $transport),
+    );
+    intake($runner, 1, 10, 'Искусственная вакансия API');
+    $makePipeline()->processPending(100);
+    $saved = $pdo->query('SELECT * FROM analysis_jobs')->fetch(PDO::FETCH_ASSOC);
+    verify($saved['analysis_status'] === 'completed' && $saved['delivery_status'] === 'pending'
+        && $saved['delivery_attempts'] === 1 && $saved['delivery_next_at'] === $dueAt
+        && $transport->texts[1] === $saved['notification'], 'Отказ доставки нарушил срок повтора или сохранение оценки.');
+
+    $restart = $makePipeline();
+    $restart->recover(110);
+    verify(!$restart->processPending($dueAt - 1) && count($transport->texts) === 2
+        && $pdo->query('SELECT delivery_attempts FROM analysis_jobs')->fetchColumn() === 1, 'Рестарт потратил попытку до срока.');
+    if ($dueAt === PHP_INT_MAX) {
+        continue;
+    }
+    $restart->processPending($dueAt);
+    $after = $pdo->query('SELECT * FROM analysis_jobs')->fetch(PDO::FETCH_ASSOC);
+    verify($after['result_json'] === $saved['result_json'] && count($ai->calls) === 1
+        && $after['delivery_status'] === 'delivered' && $after['delivery_attempts'] === 2
+        && array_slice($transport->texts, 1) === array_fill(0, 2, $saved['notification']), 'Повтор не доставил исходный итог или запустил новый анализ.');
 }
 
 foreach ([new AiException('timeout', true), new AiHttpResponse(429, 'secret-response'), new AiHttpResponse(503, 'secret-response')] as $failure) {

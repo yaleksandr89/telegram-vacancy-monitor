@@ -1,4 +1,5 @@
 import errno
+import fcntl
 import hashlib
 import json
 import os
@@ -343,35 +344,85 @@ os.execv(os.environ['REAL_PHP'], [os.environ['REAL_PHP']]+sys.argv[1:])
             os.kill(pid, 0)
 
     def test_identify_cli_json(self):
-        shutil.copyfile(ROOT / "bin/bot.php", self.app / "bin/bot.php")
-        (self.app / "vendor").unlink()
-        (self.app / "vendor").mkdir()
-        (self.app / "vendor/autoload.php").write_text("""<?php
-namespace Yaleksandr\\TelegramVacancyMonitor\\Telegram\\Http { class CurlTransport {} }
-namespace Yaleksandr\\TelegramVacancyMonitor\\Telegram\\Dto {
-    class GetUpdatesRequest { public function __construct(public int $offset, public int $timeout) {
-        if ($offset !== 0 || $timeout !== 0) { throw new \\LogicException('request'); }
-    } }
-}
-namespace Yaleksandr\\TelegramVacancyMonitor\\Telegram {
-    class BotApiClient {
-        public function __construct(...$arguments) {}
-        public function getUpdates($request): array {
-            if (getenv('CASE') === 'error') { throw new \\RuntimeException('synthetic-secret-marker'); }
-            if (getenv('CASE') === 'empty') { return []; }
-            return [(object) ['message' => (object) ['chatType'=>'private', 'senderId'=>123456, 'body'=>'/start']]];
+        app = self.base / "identify"
+        for name in ["bin", "config", "vendor"]:
+            (app / name).mkdir(parents=True)
+        shutil.copyfile(ROOT / "bin/bot.php", app / "bin/bot.php")
+        (app / "config/bot.ini").write_text('TELEGRAM_BOT_TOKEN="123:synthetic"\n')
+        (app / "vendor/autoload.php").write_text(r"""<?php
+namespace Yaleksandr\TelegramVacancyMonitor\Telegram\Http;
+require getenv('PROJECT_AUTOLOAD');
+final class CurlTransport implements HttpTransport {
+    public function postJson(string $url, string $json, int $timeoutSeconds): HttpResponse {
+        file_put_contents(getenv('TRACE'), "poll\n", FILE_APPEND);
+        $request = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+        $lock = fopen(dirname(__DIR__) . '/var/bot.lock', 'r+');
+        try {
+            if ($lock === false || flock($lock, LOCK_EX | LOCK_NB)
+                || !str_ends_with($url, '/getUpdates') || $request['offset'] !== 0 || $request['timeout'] !== 0) {
+                throw new \LogicException('Неверный запрос или отсутствует блокировка.');
+            }
+            if (getenv('CASE') === 'error') { throw new \RuntimeException('synthetic-secret-marker'); }
+            return new HttpResponse(200, getenv('RESPONSE'));
+        } finally {
+            if (is_resource($lock)) {
+                fclose($lock);
+            }
         }
     }
 }
 """)
-        for case, expected, status in [("empty", {"status": "empty", "ids": []}, 0),
-                                        ("found", {"status": "found", "ids": [123456]}, 0),
-                                        ("error", {"status": "error", "ids": []}, 1)]:
-            result = subprocess.run([PHP, self.app / "bin/bot.php", "identify", "--json"],
-                                    env=dict(os.environ, CASE=case), capture_output=True)
-            self.assertEqual(status, result.returncode)
-            self.assertEqual(expected, json.loads(result.stdout))
-            self.assertNotIn(b"synthetic-secret-marker", result.stdout + result.stderr)
+        command_entity = {"type": "bot_command", "offset": 0, "length": 6}
+        non_commands = [
+            {"text": "/starter"}, {"text": "/startfoo"}, {"text": "/start payload", "entities": [command_entity]},
+            {"text": "/start", "forward_origin": {"type": "hidden_user"}},
+            {"caption": "/start", "caption_entities": [command_entity]},
+            {"text": "/start", "entities": [{"type": "code", "offset": 0, "length": 6}]},
+            {"text": "/start", "chat": {"id": -1, "type": "group"}},
+            {"text": "/start", "from": {}},
+        ]
+
+        def invoke(case, messages, json_output=True):
+            updates = [{"update_id": i, "message": {
+                "message_id": i, "chat": {"id": i, "type": "private"}, "from": {"id": i}, **message,
+            }} for i, message in enumerate(messages, start=100)]
+            args = [PHP, app / "bin/bot.php", "identify"]
+            if json_output:
+                args.append("--json")
+            return subprocess.run(args, env=dict(os.environ, CASE=case, TRACE=str(self.base / "identify-log"),
+                                                 PROJECT_AUTOLOAD=str(ROOT / "vendor/autoload.php"),
+                                                 RESPONSE=json.dumps({"ok": True, "result": updates})),
+                                  capture_output=True, timeout=5)
+
+        lock = app / "var/bot.lock"
+        trace = self.base / "identify-log"
+        for case, messages, expected_ids, status in [
+            ("empty", non_commands, [], 0),
+            ("error", [], [], 1),
+            ("found", non_commands + [{"text": "/start"}, {"text": "/start", "entities": [command_entity]}],
+             [108, 109], 0),
+        ]:
+            with self.subTest(case=case):
+                result = invoke(case, messages)
+                self.assertEqual(status, result.returncode, result.stderr.decode())
+                self.assertEqual({"status": case, "ids": expected_ids}, json.loads(result.stdout))
+                self.assertNotIn(b"synthetic-secret-marker", result.stdout + result.stderr)
+                self.assertEqual([lock], list(lock.parent.iterdir()))
+                self.assertEqual(0o700, lock.parent.stat().st_mode & 0o777)
+                self.assertEqual(0o600, lock.stat().st_mode & 0o777)
+                with lock.open("r+") as descriptor:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.assertEqual(b"poll\npoll\npoll\n", trace.read_bytes())
+        with lock.open("r+") as descriptor:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = invoke("found", [{"text": "/start"}])
+            self.assertEqual(1, result.returncode)
+            self.assertEqual({"status": "error", "ids": []}, json.loads(result.stdout))
+            result = invoke("found", [{"text": "/start"}], json_output=False)
+            self.assertEqual(1, result.returncode)
+            self.assertIn("Занята блокировка var/bot.lock.", result.stderr.decode())
+            self.assertEqual(b"poll\npoll\npoll\n", trace.read_bytes(), "Занятый identify вызвал Bot API.")
+            self.assertEqual([lock], list(lock.parent.iterdir()), "identify открыл SQLite или удалил lock.")
 
 
 unittest.main()

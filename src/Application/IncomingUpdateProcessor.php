@@ -25,12 +25,12 @@ final readonly class IncomingUpdateProcessor
         private int $allowedUserId,
     ) {}
 
-    public function process(Update $update, bool $webhook = false): void
-    {
-        if (!$webhook && $update->id < $this->inbox->nextOffset()) {
-            return;
-        }
-
+    public function process(
+        Update $update,
+        bool $webhook = false,
+        ?int $handledAt = null,
+        bool $rebase = false,
+    ): void {
         $message = $update->message;
         $stored = null;
         $reply = null;
@@ -44,7 +44,7 @@ final readonly class IncomingUpdateProcessor
             $chatId = $message->chatId;
             $body = $message->body;
 
-            if ($body !== null && str_starts_with($body, '/start')) {
+            if ($message->isStartCommand()) {
                 $reply = 'Перешли сюда вакансию. Я сохраню текст и отвечу подтверждением.';
             } elseif ($body !== null && mb_trim($body, encoding: 'UTF-8') !== '') {
                 $stored = new StoredMessage(
@@ -62,7 +62,7 @@ final readonly class IncomingUpdateProcessor
 
         $inserted = $webhook
             ? $this->inbox->applyWebhookUpdate($update->id, $stored)
-            : $this->inbox->applyUpdate($update->id, $stored);
+            : $this->inbox->applyUpdate($update->id, $stored, $handledAt, $rebase);
         if ($inserted === null) {
             return;
         }

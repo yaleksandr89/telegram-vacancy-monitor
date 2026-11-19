@@ -110,6 +110,33 @@ verify(receive($receiver, webhookBody(111, 20)) === 503, 'Пропущенный
 verify((int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn() === 7, 'Пропущенный receipt сохранил сообщение.');
 $pdo->exec('DROP TRIGGER ignore_receipt');
 
+$base = json_decode(webhookBody(112, 20), true, flags: JSON_THROW_ON_ERROR)['message'];
+$command = ['type' => 'bot_command', 'offset' => 0, 'length' => 6];
+$cases = [
+    ['text' => '/start', 'entities' => [$command]],
+    ['text' => '/start payload', 'entities' => [$command]],
+    ['text' => '/start', 'forward_origin' => ['type' => 'hidden_user']],
+    ['caption' => '/start', 'caption_entities' => [$command]],
+];
+$repliesBefore = count($telegram->texts);
+foreach ($cases as $i => $content) {
+    $message = array_replace($base, $content, ['message_id' => 20 + $i]);
+    if (isset($content['caption'])) {
+        unset($message['text']);
+    }
+    $body = json_encode(['update_id' => 112 + $i, 'message' => $message], JSON_THROW_ON_ERROR);
+    verify(receive($receiver, $body) === 204 && receive($receiver, $body) === 204, 'Webhook не принял команду, вакансию или повтор.');
+}
+verify($pdo->query('SELECT body FROM messages WHERE recipient_message_id >= 20 ORDER BY recipient_message_id')->fetchAll(PDO::FETCH_COLUMN)
+    === ['/start payload', '/start', '/start'], 'Webhook перепутал /start и вакансии.');
+verify((int) $pdo->query('SELECT COUNT(*) FROM analysis_jobs')->fetchColumn() === 10
+    && (int) $pdo->query('SELECT COUNT(*) FROM received_updates WHERE update_id BETWEEN 112 AND 115')->fetchColumn() === 4
+    && (int) $pdo->query('SELECT COUNT(*) FROM cursor')->fetchColumn() === 0, 'Команда или вакансия нарушила задания, receipts или polling-курсор.');
+verify(array_slice($telegram->texts, $repliesBefore) === [
+    'Перешли сюда вакансию. Я сохраню текст и отвечу подтверждением.',
+    'Вакансия сохранена.', 'Вакансия сохранена.', 'Вакансия сохранена.',
+], 'Webhook неверно ответил на команду или повторил подтверждение.');
+
 // RU: Два файловых дескриптора имитируют конкурентные cron tick без runtime-файлов приложения.
 // EN: Two file descriptors simulate concurrent cron ticks without application runtime files.
 [$pdo, $ai, $telegram, $pipeline, $runner] = fixture();

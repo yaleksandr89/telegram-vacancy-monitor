@@ -7,14 +7,15 @@ namespace Yaleksandr\TelegramVacancyMonitor\Telegram\Exception;
 use RuntimeException;
 
 /**
- * EN: The Bot API rejected a request or returned a non-success HTTP status.
  * RU: Bot API отклонил запрос или вернул неуспешный HTTP-статус.
+ * EN: The Bot API rejected a request or returned a non-success HTTP status.
  */
 final class BotApiException extends RuntimeException
 {
     public function __construct(
         public readonly int $httpStatus,
         public readonly ?int $apiCode,
+        public readonly ?int $retryAfter = null,
     ) {
         $reason = match ($apiCode ?? $httpStatus) {
             400 => 'Недопустимые параметры запроса.',

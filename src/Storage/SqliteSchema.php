@@ -28,6 +28,10 @@ final readonly class SqliteSchema
             if (!in_array('analysis_start_claimed', array_column($columns, 'name'), true)) {
                 $this->pdo->exec('ALTER TABLE analysis_jobs ADD COLUMN analysis_start_claimed INTEGER NOT NULL DEFAULT 0 CHECK (analysis_start_claimed IN (0, 1))');
             }
+            $columns = $this->pdo->query('PRAGMA table_info(cursor)')->fetchAll(PDO::FETCH_ASSOC);
+            if (!in_array('last_handled_at', array_column($columns, 'name'), true)) {
+                $this->pdo->exec('ALTER TABLE cursor ADD COLUMN last_handled_at INTEGER');
+            }
             $this->pdo->commit();
         } catch (Throwable $exception) {
             if ($this->pdo->inTransaction()) {
@@ -60,7 +64,8 @@ final readonly class SqliteSchema
         $this->pdo->exec(<<<'SQL'
             CREATE TABLE IF NOT EXISTS cursor (
                 name TEXT PRIMARY KEY,
-                next_offset INTEGER NOT NULL
+                next_offset INTEGER NOT NULL,
+                last_handled_at INTEGER
             )
             SQL);
         $this->pdo->exec(<<<'SQL'

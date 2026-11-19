@@ -498,7 +498,7 @@ def main():
             copy_file(Path('/usr/share/common-licenses') / name, runtime / 'notices/common-licenses' / name)
     tracked = subprocess.check_output(["git", "-C", ROOT, "ls-files", "-z", "--", "src"]).decode().split("\0")
     files = [p for p in tracked if p.endswith(".php") and p != 'src/Application/WebhookReceiver.php']
-    files += ["bin/bot.php", "bin/vacancy-monitor.sh", "composer.json", "composer.lock",
+    files += ["LICENSE", "bin/bot.php", "bin/vacancy-monitor.sh", "composer.json", "composer.lock",
               "config/bot.example.ini", "config/profile/README.md", "config/profile/instructions.example.md",
               "docs/guides/local-gum.md", "docs/guides/vds-webhook.md"]
     for tree in ["src/ui/gum", "src/ui/windows"]:
