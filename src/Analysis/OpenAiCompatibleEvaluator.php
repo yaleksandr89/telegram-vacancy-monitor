@@ -113,6 +113,10 @@ final readonly class OpenAiCompatibleEvaluator
         ) {
             throw new AiException('invalid_response', true);
         }
-        return $message->content;
+        $content = $message->content;
+        if (preg_match('/\A[ \t\r\n]*```json\r?\n(.*?)\r?\n```[ \t\r\n]*\z/s', $content, $fence) === 1) {
+            return $fence[1];
+        }
+        return $content;
     }
 }
