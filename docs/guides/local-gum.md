@@ -25,6 +25,7 @@
 Linux:
 
 ```bash
+# Распакуйте архив и запустите приложение из созданного каталога.
 tar -xzf telegram-vacancy-monitor-linux-x86_64.tar.gz
 cd telegram-vacancy-monitor
 ./vacancy-monitor
@@ -33,6 +34,7 @@ cd telegram-vacancy-monitor
 Windows: распакуйте ZIP-архив и откройте `telegram-vacancy-monitor/vacancy-monitor.exe` **двойным щелчком**. Приложение также можно запустить из PowerShell:
 
 ```powershell
+# Распакуйте архив в отдельную папку и запустите приложение.
 Expand-Archive -LiteralPath .\telegram-vacancy-monitor-windows-x64.zip -DestinationPath .\vacancy-monitor-app
 Set-Location -LiteralPath .\vacancy-monitor-app\telegram-vacancy-monitor
 .\vacancy-monitor.exe
@@ -41,6 +43,7 @@ Set-Location -LiteralPath .\vacancy-monitor-app\telegram-vacancy-monitor
 macOS на Apple Silicon:
 
 ```bash
+# Распакуйте сборку ARM64 и запустите приложение.
 tar -xzf telegram-vacancy-monitor-macos-arm64.tar.gz
 cd telegram-vacancy-monitor
 ./vacancy-monitor
@@ -99,6 +102,7 @@ if (-not (Test-Path -LiteralPath .\config\profile\local\instructions.md)) {
 Запустите сервер модели с интерфейсом Chat Completions. Если сервер работает на этом же компьютере, настройки могут выглядеть так:
 
 ```ini
+; Пример для локального API. Укажите свой идентификатор модели.
 AI_PROVIDER_LOCATION = "local"
 AI_BASE_URL = "http://127.0.0.1:1234/v1"
 AI_MODEL = "model-id"

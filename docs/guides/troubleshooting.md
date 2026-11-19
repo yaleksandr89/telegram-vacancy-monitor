@@ -74,6 +74,7 @@ AI-транспорт не использует прокси и не следу�
 Если нужно уточнить этап сбоя, откройте **свою** `var/vacancies.sqlite` локальным SQLite-клиентом только для чтения и посмотрите состояния без текста вакансий:
 
 ```sql
+-- Только чтение: последние десять состояний без текста вакансий.
 SELECT message_id, analysis_status, analysis_error, analysis_attempts,
        delivery_status, delivery_error, delivery_attempts
 FROM analysis_jobs
