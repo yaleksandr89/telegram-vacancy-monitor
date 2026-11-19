@@ -8,6 +8,7 @@ import itertools
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -213,6 +214,119 @@ class ReleasePipeline(unittest.TestCase):
         with mock.patch.object(release, "output", side_effect=["a" * 40, " M source"]):
             with self.assertRaisesRegex(ValueError, "чистый"):
                 release.check_source_sha("a" * 40)
+
+    def test_workflow_windows_python_streams(self):
+        workflow = (ROOT / release.WORKFLOW).read_text(encoding="utf-8")
+        match = re.search(r"^        id: bundles\n(?:.*\n)*?^        run: \|\n((?: {10}.*\n)+)",
+                          workflow, re.MULTILINE)
+        self.assertIsNotNone(match)
+        step = "\n".join(line[10:] for line in match[1].splitlines())
+        bash = release.executable("bash")
+        commands = 'python() { "$TEST_PYTHON" "$@"; }\npython3() { python "$@"; }\n'
+
+        fixtures = {
+            "build/ci/bootstrap.py": (
+                "import subprocess, sys\n"
+                "raise SystemExit(subprocess.run([sys.executable, 'build/release.py']).returncode)\n"
+            ),
+            "build/release.py": (
+                "import subprocess, sys\n"
+                "print('Сборка windows; журнал: fixture.log', flush=True)\n"
+                "raise SystemExit(subprocess.run([sys.executable, 'build/common/package.py']).returncode)\n"
+            ),
+            "build/common/package.py": (
+                "import os, sys\n"
+                "print('Архив: fixture.zip')\n"
+                "print('Диагностика упаковки', file=sys.stderr)\n"
+                "raise SystemExit(int(os.environ['TEST_EXIT']))\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            for name, code in fixtures.items():
+                path = base / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(code, encoding="utf-8")
+
+            def run(runner_os, status):
+                env = dict(RUNNER_OS=runner_os, BUILD_TARGET=runner_os.lower(), SOURCE_SHA="a" * 40,
+                           PYTHONIOENCODING="cp1252", PYTHONDONTWRITEBYTECODE="1",
+                           TEST_PYTHON=sys.executable, TEST_EXIT=str(status), PATH=str(base / "no-tools"))
+                return subprocess.run([bash, "--noprofile", "--norc", "-eo", "pipefail", "-c", commands + step],
+                                      cwd=base, env=env, capture_output=True, timeout=10)
+
+            baseline = run("Linux", 0)
+            self.assertEqual(1, baseline.returncode)
+            self.assertEqual(b"", baseline.stdout)
+            self.assertIn(b"UnicodeEncodeError", baseline.stderr)
+            for status in (0, 23):
+                with self.subTest(status=status):
+                    result = run("Windows", status)
+                    self.assertEqual(status, result.returncode, result.stderr)
+                    self.assertEqual(["Сборка windows; журнал: fixture.log", "Архив: fixture.zip"],
+                                     result.stdout.decode("utf-8").splitlines())
+                    self.assertEqual("Диагностика упаковки", result.stderr.decode("utf-8").strip())
+
+    def test_linux_snapshot_guards(self):
+        script = (ROOT / "build/ci/linux-snapshot.sh").read_text(encoding="utf-8")
+        # RU: Исполняем только проверки и отдельный маркер; перезапись sources и APT исключены.
+        # EN: Execute only the guards and the separate marker; omit the sources rewrite and APT.
+        guards, rewrite, rest = script.partition("\ncat > /etc/apt/sources.list.d/ubuntu.sources <<'SOURCES'\n")
+        self.assertTrue(rewrite)
+        before_update, update, _ = rest.partition("\napt-get update -o APT::Update::Error-Mode=any\n")
+        self.assertTrue(update)
+        marker = before_update.splitlines()[-1]
+        self.assertTrue(marker.startswith("printf "))
+        for path in ("/.dockerenv", "/etc/", "/src/", "/setup-php/"):
+            guards = guards.replace(" " + path, " " + path[1:])
+        mocks = 'id() { printf "%s\\n" "$TEST_UID"; }\nuname() { printf "%s\\n" "$TEST_ARCH"; }\n'
+        bash = release.executable("bash")
+
+        allowed_source = "etc/apt/sources.list.d/ubuntu.sources"
+        sources_list = "etc/apt/sources.list"
+        os_release = "etc/os-release"
+        fixtures = {".dockerenv": "", os_release: "ID=ubuntu\nVERSION_ID=24.04\n",
+                    "src/build/common/ci-tools.json": "{}", "setup-php/src/scripts/linux.sh": "",
+                    allowed_source: ""}
+        for diagnostic, env_changes, file_changes in (
+            ("TVM_CI_CONTAINER=1", {"TVM_CI_CONTAINER": ""}, {}),
+            ("GITHUB_ACTIONS=true", {"GITHUB_ACTIONS": "false"}, {}),
+            ("UID 0", {"TEST_UID": "1000"}, {}),
+            (".dockerenv", {}, {".dockerenv": None}),
+            ("архитектура x86_64", {"TEST_ARCH": "aarch64"}, {}),
+            ("ID=ubuntu", {}, {os_release: "ID=debian\nVERSION_ID=24.04\n"}),
+            ("VERSION_ID=24.04", {}, {os_release: "ID=ubuntu\nVERSION_ID=22.04\n"}),
+            ("VERSION_ID=24.04", {}, {os_release: "ID=ubuntu\n"}),
+            ("ci-tools.json", {}, {"src/build/common/ci-tools.json": None}),
+            ("setup-php/src/scripts/linux.sh", {}, {"setup-php/src/scripts/linux.sh": None}),
+            ("sources.list непустой", {}, {sources_list: "# synthetic comment\n"}),
+            ("ожидается только ubuntu.sources, получено extra.list", {}, {"etc/apt/sources.list.d/extra.list": ""}),
+            ("ожидается только ubuntu.sources", {}, {allowed_source: None}),
+            (None, {}, {}),
+            (None, {}, {sources_list: ""}),
+        ):
+            with self.subTest(diagnostic=diagnostic, env=env_changes, files=file_changes), \
+                    tempfile.TemporaryDirectory() as directory:
+                base = Path(directory)
+                (base / allowed_source).parent.mkdir(parents=True)
+                for name, content in (fixtures | file_changes).items():
+                    if content is not None:
+                        path = base / name
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_text(content, encoding="utf-8")
+                env = dict(TVM_CI_CONTAINER="1", GITHUB_ACTIONS="true", TEST_UID="0", TEST_ARCH="x86_64",
+                           PATH=str(base / "no-tools"), LC_ALL="C") | env_changes
+                result = subprocess.run([bash, "--noprofile", "--norc", "-c", mocks + guards + "\n" + marker],
+                                        cwd=base, env=env, capture_output=True, encoding="utf-8", timeout=10)
+                if diagnostic is None:
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertEqual("", result.stderr)
+                    self.assertIn("проверки пройдены, запускается apt-get update", result.stdout)
+                else:
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertEqual("", result.stdout)
+                    self.assertTrue(result.stderr.startswith("Linux snapshot: "), result.stderr)
+                    self.assertIn(diagnostic, result.stderr)
 
     def test_workflow_contract(self):
         text = (ROOT / release.WORKFLOW).read_text()

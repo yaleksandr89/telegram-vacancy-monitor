@@ -80,7 +80,7 @@ jobs:
           SOURCE_SHA: ${{ github.sha }}
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
-          if [ "$RUNNER_OS" = Windows ]; then python build/ci/bootstrap.py "$BUILD_TARGET" --source-sha "$SOURCE_SHA"
+          if [ "$RUNNER_OS" = Windows ]; then PYTHONIOENCODING=utf-8 python build/ci/bootstrap.py "$BUILD_TARGET" --source-sha "$SOURCE_SHA"
           else python3 build/ci/bootstrap.py "$BUILD_TARGET" --source-sha "$SOURCE_SHA"; fi
       - name: Сохранить проверенные архив и sidecar в workflow run
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0

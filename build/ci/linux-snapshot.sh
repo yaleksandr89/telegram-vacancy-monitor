@@ -1,15 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
-[[ ${TVM_CI_CONTAINER:-} == 1 && ${GITHUB_ACTIONS:-} == true && $(id -u) == 0 && -f /.dockerenv ]]
-[[ $(uname -m) == x86_64 ]]
+
+fail() {
+    printf 'Linux snapshot: %s\n' "$1" >&2
+    exit 1
+}
+
+[[ ${TVM_CI_CONTAINER:-} == 1 ]] || fail 'Требуется TVM_CI_CONTAINER=1.'
+[[ ${GITHUB_ACTIONS:-} == true ]] || fail 'Требуется GITHUB_ACTIONS=true.'
+[[ $(id -u) == 0 ]] || fail 'Требуется UID 0.'
+[[ -f /.dockerenv ]] || fail 'Требуется файл /.dockerenv.'
+[[ $(uname -m) == x86_64 ]] || fail 'Требуется архитектура x86_64.'
 source /etc/os-release
-[[ $ID == ubuntu && $VERSION_ID == 24.04 ]]
-[[ -f /src/build/common/ci-tools.json && -f /setup-php/src/scripts/linux.sh ]]
+[[ ${ID:-} == ubuntu ]] || fail 'Требуется ID=ubuntu в /etc/os-release.'
+[[ ${VERSION_ID:-} == 24.04 ]] || fail 'Требуется VERSION_ID=24.04 в /etc/os-release.'
+[[ -f /src/build/common/ci-tools.json ]] || fail 'Требуется файл /src/build/common/ci-tools.json.'
+[[ -f /setup-php/src/scripts/linux.sh ]] || fail 'Требуется файл /setup-php/src/scripts/linux.sh.'
 # RU: Только известный одноразовый Ubuntu image; неожиданные apt sources запрещены.
 # EN: Only the known ephemeral Ubuntu image; reject unexpected apt sources.
-[[ ! -s /etc/apt/sources.list ]]
+[[ ! -s /etc/apt/sources.list ]] || fail 'Файл /etc/apt/sources.list непустой.'
 for file in /etc/apt/sources.list.d/*; do
-    [[ $file == /etc/apt/sources.list.d/ubuntu.sources ]]
+    [[ $file == /etc/apt/sources.list.d/ubuntu.sources ]] ||
+        fail "В /etc/apt/sources.list.d/ ожидается только ubuntu.sources, получено $(printf '%q' "${file##*/}")."
 done
 cat > /etc/apt/sources.list.d/ubuntu.sources <<'SOURCES'
 Types: deb
@@ -20,6 +32,7 @@ Architectures: amd64
 Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
 SOURCES
 export DEBIAN_FRONTEND=noninteractive
+printf '%s\n' 'Linux snapshot: проверки пройдены, запускается apt-get update.'
 apt-get update -o APT::Update::Error-Mode=any
 # RU: Проверяем выбранные signed metadata до исполнения устанавливаемых пакетов.
 # EN: Check the selected signed metadata before executing installed packages.
