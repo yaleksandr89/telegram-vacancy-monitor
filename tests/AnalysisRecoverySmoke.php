@@ -24,8 +24,9 @@ $profile = fixture()[5];
 foreach ([false, true] as $failDelivery) {
     [$pdo, $ai, $telegram, $pipeline, $runner] = fixture();
     $data = verboseResult();
+    $content = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     $ai->responses = [new AiHttpResponse(200, json_encode([
-        'choices' => [['message' => ['content' => json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]]],
+        'choices' => [['message' => ['content' => $failDelivery ? "```json\n$content\n```" : $content]]],
     ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR))];
     intake($runner, 1, 10, 'Искусственная вакансия API https://t.me/c/456/8', origin: 8);
     $telegram->beforeSend = static function () use ($telegram, $failDelivery): void {
@@ -35,6 +36,7 @@ foreach ([false, true] as $failDelivery) {
     $job = $pdo->query('SELECT * FROM analysis_jobs')->fetch(PDO::FETCH_ASSOC);
     $expected = array_replace($data, ['source_status' => 'verified_origin_ids']);
     verify($job['analysis_status'] === 'completed' && (int) $job['analysis_attempts'] === 1 && $job['analysis_error'] === null, 'Подробный ответ вызвал ошибку или повтор анализа.');
+    verify($job['delivery_attempts'] === 1 && $job['delivery_status'] === ($failDelivery ? 'pending' : 'delivered'), 'Первая попытка доставки учтена неверно.');
     verify(json_decode($job['result_json'], true, flags: JSON_THROW_ON_ERROR) === $expected, 'Полный результат не сохранён.');
     $notification = $job['notification'];
     verify(strlen(mb_convert_encoding($notification, 'UTF-16LE', 'UTF-8')) <= 8192
@@ -46,7 +48,8 @@ foreach ([false, true] as $failDelivery) {
     $pipeline->processPending(130);
     $pipeline->processPending(10000);
     $after = $pdo->query('SELECT * FROM analysis_jobs')->fetch(PDO::FETCH_ASSOC);
-    verify(count($ai->calls) === 1 && $after['delivery_status'] === 'delivered', 'Повтор доставки вызвал ИИ или не завершился.');
+    verify(count($ai->calls) === 1 && $after['delivery_status'] === 'delivered'
+        && $after['delivery_attempts'] === ($failDelivery ? 2 : 1), 'Повтор доставки вызвал ИИ или не завершился.');
     verify($after['notification'] === $notification && $after['result_json'] === $job['result_json'], 'Повтор изменил сохранённый итог.');
     verify(array_slice($telegram->texts, 2) === array_fill(0, $failDelivery ? 2 : 1, $notification), 'Доставка разделила итог или повторила старт.');
 }
@@ -103,21 +106,35 @@ foreach ([
         && array_slice($transport->texts, 1) === array_fill(0, 2, $saved['notification']), 'Повтор не доставил исходный итог или запустил новый анализ.');
 }
 
-foreach ([new AiException('timeout', true), new AiHttpResponse(429, 'secret-response'), new AiHttpResponse(503, 'secret-response')] as $failure) {
+$malformedFenced = new AiHttpResponse(200, json_encode([
+    'choices' => [['message' => ['content' => "```json\n{\"company\":\"secret-response\",}\n```"]]],
+], JSON_THROW_ON_ERROR));
+foreach ([
+    [new AiException('timeout', true), 'timeout'],
+    [new AiHttpResponse(429, 'secret-response'), 'http_429'],
+    [new AiHttpResponse(503, 'secret-response'), 'http_503'],
+    [$malformedFenced, 'invalid_output'],
+] as [$failure, $category]) {
     [$pdo, $ai, $telegram, $pipeline, $runner] = fixture();
     $ai->responses = [$failure, $failure, $failure];
     intake($runner, 1, 10, 'PHP API удалённо');
     $pipeline->processPending(100);
-    $pipeline->processPending(100);
-    verify(count($ai->calls) === 1, 'Повтор без задержки.');
-    $pipeline->processPending(130);
-    $pipeline->processPending(190);
+    $pending = $pdo->query('SELECT * FROM analysis_jobs')->fetch(PDO::FETCH_ASSOC);
+    verify($pending['analysis_status'] === 'pending' && $pending['analysis_error'] === $category
+        && $pending['result_json'] === null && count($telegram->texts) === 2, 'Промежуточная ошибка записана как результат.');
+    $pipeline->processPending($pending['analysis_next_at'] - 1);
+    verify(count($ai->calls) === 1 && $pending['analysis_next_at'] >= 130, 'Повтор без задержки.');
+    $pipeline->processPending($pending['analysis_next_at']);
+    $pipeline->processPending((int) $pdo->query('SELECT analysis_next_at FROM analysis_jobs')->fetchColumn());
     $pipeline->processPending(10000);
     $job = $pdo->query('SELECT * FROM analysis_jobs')->fetch(PDO::FETCH_ASSOC);
     verify(count($ai->calls) === 3 && (int) $job['analysis_attempts'] === 3, 'Не три общие попытки.');
     verify(count(array_filter($telegram->texts, static fn (string $text): bool => str_starts_with($text, 'Вакансия передана на анализ ИИ.'))) === 1, 'Повтор ИИ продублировал старт.');
     verify($job['analysis_status'] === 'failed' && $job['verdict'] === 'technical_failure' && $job['delivery_status'] === 'delivered', 'Технический результат потерян.');
-    verify(str_contains(end($telegram->texts), 'Не удалось обработать') && !str_contains(json_encode($job), 'secret-response'), 'Нет технического уведомления или есть утечка.');
+    verify($job['analysis_error'] === $category && $job['result_json'] === null, 'Окончательная ошибка записана как результат.');
+    verify(count($telegram->texts) === 3 && str_contains(end($telegram->texts), 'Не удалось обработать')
+        && !str_contains(implode("\n", $telegram->texts), 'secret-response')
+        && !str_contains(json_encode($job, JSON_THROW_ON_ERROR), 'secret-response'), 'Нет технического уведомления или есть утечка.');
     verify((int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn() === 1, 'Удалён исходник.');
 }
 
