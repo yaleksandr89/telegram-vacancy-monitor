@@ -24,6 +24,11 @@ use Yaleksandr\TelegramVacancyMonitor\Application\VacancyResultFormatter;
 require __DIR__ . '/Support/AnalysisFixtures.php';
 
 [$pdo, $ai, $telegram, $pipeline, $runner, $profile] = fixture();
+$analysisJson = json_encode(syntheticResult(), JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+$fenced = "```json\n$analysisJson\n```";
+$ai->responses = [new AiHttpResponse(200, json_encode([
+    'choices' => [['message' => ['content' => $fenced]]],
+], JSON_THROW_ON_ERROR))];
 intake($runner, 1, 10, 'Разработка API. https://example.org/vacancy', origin: 8);
 verify((int) $pdo->query('SELECT COUNT(*) FROM analysis_jobs')->fetchColumn() === 1, 'Приём не создал задание.');
 $ai->beforeCall = static function () use ($pdo, $telegram): void {
@@ -44,10 +49,11 @@ $pipeline->processPending(100);
 $telegram->beforeSend = null;
 $job = $pdo->query('SELECT * FROM analysis_jobs')->fetch(PDO::FETCH_ASSOC);
 verify($job['analysis_status'] === 'completed' && $job['delivery_status'] === 'delivered', 'Сквозная обработка не завершена.');
-verify((int) $job['analysis_attempts'] === 1 && $job['profile_hash'] === testPrompt()->fingerprint($profile), 'Попытка или версия профиля неверны.');
-verify($job['verdict'] === 'apply' && str_contains($job['result_json'], 'API'), 'Результат не сохранён.');
+verify(count($ai->calls) === 1 && (int) $job['analysis_attempts'] === 1 && $job['profile_hash'] === testPrompt()->fingerprint($profile), 'Попытка или версия профиля неверны.');
+verify($job['verdict'] === 'apply' && json_decode($job['result_json'], true, flags: JSON_THROW_ON_ERROR) === syntheticResult(), 'Полный результат не сохранён.');
 verify(count($telegram->texts) === 3 && $telegram->texts[0] === 'Вакансия сохранена.', 'Неверный порядок подтверждения, старта и итога.');
 $final = end($telegram->texts);
+verify((int) $job['delivery_attempts'] === 1 && $final === $job['notification'], 'Сохранённый итог не доставлен с первой попытки.');
 verify(str_contains($final, 'Откликаться') && str_contains($final, 'Подходящие задачи') && str_contains($final, 'ссылка из объявления (не проверена)') && str_contains($final, 'https://example.org/vacancy'), 'Некорректное уведомление или ссылка.');
 $request = json_decode($ai->calls[0]['json'], true, flags: JSON_THROW_ON_ERROR);
 verify($request['stream'] === false && array_column($request['messages'], 'role') === ['system', 'user'] && !isset($request['tools']), 'Неверный протокол ИИ.');
@@ -125,6 +131,58 @@ $saved = json_decode($pdo->query('SELECT result_json FROM analysis_jobs ORDER BY
 verify($saved['source_status'] === 'verified_origin_ids', 'Серверный статус источника не сохранён.');
 
 $validator = new AnalysisResultValidator();
+$fakeAi = new FakeAi();
+$evaluator = new OpenAiCompatibleEvaluator($fakeAi, $validator, testPrompt(), 'http://localhost/v1', 'synthetic', 'synthetic-api-key');
+$evaluateMessage = static function (array $message) use ($fakeAi, $evaluator, $profile): AnalysisResult {
+    $fakeAi->responses = [new AiHttpResponse(200, json_encode([
+        'choices' => [['message' => $message]],
+    ], JSON_THROW_ON_ERROR))];
+    return $evaluator->evaluate('Искусственная вакансия', $profile);
+};
+$bare = $evaluateMessage(['content' => $analysisJson]);
+verify(json_decode($bare->toJson(), true, flags: JSON_THROW_ON_ERROR) === syntheticResult(), 'Потеряны поля обычного JSON.');
+foreach ([$fenced, " \t\r\n" . str_replace("\n", "\r\n", $fenced) . " \t\r\n"] as $content) {
+    verify($evaluateMessage(['content' => $content]) == $bare, 'Ограждение изменило результат оценки.');
+}
+
+$extraField = json_encode([...syntheticResult(), 'unexpected' => 'synthetic-output'], JSON_THROW_ON_ERROR);
+$unsafeField = json_encode(array_replace(syntheticResult(), ['rationale' => '<b>synthetic-output</b>']), JSON_THROW_ON_ERROR);
+foreach ([
+    'произвольный текст внутри' => "```json\nsynthetic-output\n```",
+    'синтаксическая ошибка' => "```json\n{\"company\":\"synthetic-output\",}\n```",
+    'проза перед блоком' => "synthetic-output\n$fenced",
+    'проза после блока' => "$fenced\nsynthetic-output",
+    'два блока' => "$fenced\n$fenced",
+    'вложенный блок' => "```json\n$fenced\n```",
+    'два объекта' => "```json\n$analysisJson\n$analysisJson\n```",
+    'другой язык' => "```text\n$analysisJson\n```",
+    'закрытие другой длины' => "```json\n$analysisJson\n````",
+    'закрытие на строке объекта' => "```json\n$analysisJson```",
+    'лишнее поле' => "```json\n$extraField\n```",
+    'опасное поле' => "```json\n$unsafeField\n```",
+] as $case => $content) {
+    try {
+        $evaluateMessage(['content' => $content]);
+        throw new RuntimeException('Принят недопустимый ответ — ' . $case);
+    } catch (AiException $exception) {
+        verify($exception->category === 'invalid_output' && $exception->retryable
+            && $exception->getMessage() === 'Не удалось выполнить анализ вакансии.', 'Неверная диагностика — ' . $case);
+    }
+}
+foreach ([
+    ['content' => ['synthetic-output']],
+    ['content' => $fenced, 'tool_calls' => [['type' => 'function', 'function' => ['name' => 'synthetic']]]],
+    ['content' => $fenced, 'function_call' => ['name' => 'synthetic', 'arguments' => '{}']],
+] as $message) {
+    try {
+        $evaluateMessage($message);
+        throw new RuntimeException('Принята недопустимая структура ответа.');
+    } catch (AiException $exception) {
+        verify($exception->category === 'invalid_response' && $exception->retryable
+            && $exception->getMessage() === 'Не удалось выполнить анализ вакансии.', 'Неверная диагностика структуры ответа.');
+    }
+}
+
 foreach (Verdict::cases() as $verdict) {
     $result = $validator->validate(json_encode(syntheticResult($verdict->value), JSON_THROW_ON_ERROR));
     verify($result->verdict === $verdict && $result->priority === Priority::High, 'Доменное значение потеряно.');
@@ -158,7 +216,7 @@ try {
 } catch (AiException $exception) {
     verify($exception->category === 'serialization' && $exception->getPrevious() instanceof JsonException, 'Потеряна причина ошибки сериализации результата.');
 }
-$bad = ['{}', 'not-json', str_repeat('[', 17) . '0' . str_repeat(']', 17), "\xFF"];
+$bad = ['{}', 'not-json', str_repeat('[', 17) . '0' . str_repeat(']', 17), "\xFF", $fenced];
 $bad[] = str_replace('"risks":[]', '"risks":{}', json_encode(syntheticResult(), JSON_THROW_ON_ERROR));
 foreach ([
     'verdict' => 'execute', 'priority' => 'urgent', 'rationale' => 123,
