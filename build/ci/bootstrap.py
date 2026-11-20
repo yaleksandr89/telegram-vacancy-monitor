@@ -156,7 +156,8 @@ def linux(session, source_sha):
         smoke_env = ["env", "PYTHONDONTWRITEBYTECODE=1", "PATH=/usr/bin:/bin"]
         # RU: Native smoke вне Docker: без изменения seccomp, AppArmor или пакетов хоста.
         # EN: Native smoke outside Docker: no host seccomp, AppArmor or package changes.
-        run(["sudo", "-n", *smoke_env, bwrap, "--unshare-user", "--unshare-pid", "--unshare-net", "--ro-bind", "/", "/", "/usr/bin/true"])
+        smoke = ["sudo", "-n", *smoke_env, sys.executable, ROOT / "tests/portable/runtime_smoke.py", "--bwrap", bwrap]
+        run([*smoke, "--preflight", session])
         version = release.output(["docker", "exec", name, "/usr/bin/php8.5", "/work/composer.phar", "--no-plugins", "--version"])
         if not version.startswith("Composer version " + TOOLS["composer"]["version"] + " "):
             raise ValueError("CI: версия Composer не совпала")
@@ -167,10 +168,7 @@ def linux(session, source_sha):
              "--source-sha", source_sha, "--build-php", "/usr/bin/php8.5", "--composer", "/work/composer.phar",
              "--cache", "/work/cache", "--output-dir", "/work"])
         artifact = locate_artifact(session, "linux", source_sha)
-        temporary = session / "native-smoke"
-        temporary.mkdir()
-        run(["sudo", "-n", *smoke_env, "TMPDIR=" + str(temporary), sys.executable,
-             ROOT / "tests/portable/runtime_smoke.py", artifact, "--bwrap", bwrap])
+        run([*smoke, artifact])
         publish_verified(session, artifact, "linux", source_sha)
     finally:
         if started:

@@ -1,4 +1,5 @@
 import argparse
+from contextlib import contextmanager
 import fcntl
 import hashlib
 import importlib.util
@@ -9,6 +10,7 @@ import platform
 import pty
 import select
 import shutil
+import stat
 import struct
 import subprocess
 import sys
@@ -83,7 +85,54 @@ def real_menu(command, env):
     return bytes(transcript)
 
 
-def linux_menu(app, bwrap):
+def linux_staging():
+    parent = Path("/tmp")
+    parent_info = parent.lstat()
+    root_info = parent.parent.stat()
+    mode = parent_info.st_mode
+    if (not stat.S_ISDIR(mode) or parent_info.st_uid != root_info.st_uid
+            or not mode & stat.S_IXOTH or not root_info.st_mode & stat.S_IXOTH
+            or (mode & 0o022 and not mode & stat.S_ISVTX)):
+        raise ValueError("Linux smoke: /tmp не подходит для безопасного bind source.")
+    return tempfile.TemporaryDirectory(prefix="tvm-portable-", dir=parent)
+
+
+@contextmanager
+def linux_mount_source(app):
+    staging = app.parent
+    owner = os.geteuid()
+    stage_info = staging.lstat()
+    if (staging.parent != Path("/tmp") or not staging.name.startswith("tvm-portable-")
+            or not stat.S_ISDIR(stage_info.st_mode) or stage_info.st_uid != owner
+            or stat.S_IMODE(stage_info.st_mode) != 0o700 or set(staging.iterdir()) != {app}):
+        raise ValueError("Linux smoke: ожидался отдельный приватный каталог с одним приложением.")
+    directories = []
+    for path in [app, *app.rglob("*")]:
+        info = path.lstat()
+        parts = path.relative_to(app).parts
+        if parts and (parts[0] in ("var", "public", ".git", "tests")
+                      or parts[:2] == ("config", "bot.ini") or parts[:3] == ("config", "profile", "local")):
+            raise ValueError("Linux smoke: в bind source обнаружен приватный или серверный путь.")
+        if (info.st_uid != owner
+                or not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode))
+                or (stat.S_ISREG(info.st_mode) and info.st_mode & 0o022)):
+            raise ValueError("Linux smoke: неожиданный владелец, тип или права файла bind source.")
+        if stat.S_ISDIR(info.st_mode):
+            directories.append(path)
+    if app not in directories:
+        raise ValueError("Linux smoke: bind source должен быть каталогом.")
+    # RU: Открываем проход только к проверенному дереву, сохраняя запрет на просмотр staging и запись другими.
+    # EN: Allow traversal only to the verified tree, keeping staging unlistable and unwritable by others.
+    for directory in directories:
+        directory.chmod(0o755)
+    staging.chmod(0o711)
+    try:
+        yield
+    finally:
+        staging.chmod(0o700)
+
+
+def linux_sandbox(app, bwrap, executable):
     # RU: Пустое mount namespace: ни PHP, ни Composer, ни расширений хоста.
     # EN: Empty mount namespace: no host PHP, Composer or PHP extensions.
     command = [str(bwrap), "--unshare-user", "--unshare-pid", "--unshare-net", "--die-with-parent",
@@ -94,41 +143,80 @@ def linux_menu(app, bwrap):
                  "/lib64/ld-linux-x86-64.so.2"]:
         command += ["--ro-bind", name, name]
     command += ["--chdir", "/tmp", "/bin/bash", "-c",
-                'if command -v php || command -v composer || command -v gum; then exit 77; fi; exec /app/vacancy-monitor']
+                f'if command -v php || command -v composer || command -v gum; then exit 77; fi; exec {executable}']
     clean_env = dict(os.environ, TERM="xterm-256color", PATH="/usr/bin:/bin", LANG="C", LC_ALL="C")
-    transcript = real_menu(command, clean_env)
+    return command, clean_env
+
+
+def linux_preflight(bwrap):
+    with linux_staging() as directory:
+        app = Path(directory) / "Приложение with spaces"
+        app.mkdir()
+        probe = app / "probe"
+        probe.write_text("""#!/bin/bash
+set -eu
+[[ $(dirname /app/probe) == /app && -d /proc/self && -c /dev/null ]]
+screen=$(tput clear)
+[[ "$screen" == *$'\\e[2J'* ]]
+""", encoding="utf-8")
+        probe.chmod(0o755)
+        with linux_mount_source(app):
+            command, env = linux_sandbox(app, bwrap, "/app/probe")
+            subprocess.run(command, env=env, check=True, timeout=30)
+    print("PASS: Linux bubblewrap bind preflight", flush=True)
+
+
+def linux_menu(app, bwrap):
+    with linux_mount_source(app):
+        transcript = real_menu(*linux_sandbox(app, bwrap, "/app/vacancy-monitor"))
     assert b'\x1b[2J' in transcript, 'Terminal screen was not cleared'
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("archive", type=Path)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("archive", type=Path, nargs="?")
+    source.add_argument("--preflight", type=Path, metavar="SESSION")
     parser.add_argument("--bwrap", type=Path, help="Абсолютный путь к bwrap из сессии Linux CI")
     args = parser.parse_args(argv)
-    archive = args.archive.resolve()
     system = platform.system()
+    if args.preflight is not None and system != "Linux":
+        parser.error("--preflight применяется только в Linux.")
+    archive = args.archive.resolve() if args.archive is not None else None
     if system == "Linux":
         if args.bwrap is None:
             parser.error("Для Linux требуется --bwrap.")
-        release_dir = archive.parent.parent
-        expected = release_dir.parent / "smoke-tools/usr/bin/bwrap"
-        if (archive.parent.name != "artifacts" or not release_dir.name.startswith("tvm-release-")
-                or args.bwrap != expected):
-            parser.error("--bwrap должен указывать на абсолютный путь к smoke-tools/usr/bin/bwrap в сессии архива.")
+        if sys.flags.optimize:
+            parser.error("Для Linux smoke требуются включённые проверки assert.")
+        if args.preflight is not None:
+            session = args.preflight.resolve()
+        else:
+            release_dir = archive.parent.parent
+            if archive.parent.name != "artifacts" or not release_dir.name.startswith("tvm-release-"):
+                parser.error("Для Linux требуется архив из tvm-release-*/artifacts.")
+            session = release_dir.parent
+        expected = session / "smoke-tools/usr/bin/bwrap"
+        if args.bwrap != expected:
+            parser.error("--bwrap должен указывать на абсолютный путь к smoke-tools/usr/bin/bwrap в той же CI-сессии.")
         if args.bwrap.resolve() != expected or not args.bwrap.is_file() or not os.access(args.bwrap, os.X_OK):
             parser.error("--bwrap должен быть обычным исполняемым файлом без символьных ссылок.")
+        if args.preflight is not None:
+            linux_preflight(args.bwrap)
+            return
     elif args.bwrap is not None:
         parser.error("--bwrap применяется только в Linux.")
     sidecar = archive.with_name(archive.name + ".sha256")
     assert packaging.digest(archive) == sidecar.read_text().split()[0], "Archive SHA256 mismatch"
-    with tempfile.TemporaryDirectory(prefix="tvm-portable-") as temporary:
+    staging = linux_staging() if system == "Linux" else tempfile.TemporaryDirectory(prefix="tvm-portable-")
+    with staging as temporary:
         temp = Path(temporary)
         packaging.extract(archive, temp)
         original = temp / "telegram-vacancy-monitor"
         app = temp / "Приложение with spaces"
         original.rename(app)
         manifest = json.loads((app / "SHA256SUMS.json").read_text())
-        actual = {str(p.relative_to(app)): packaging.digest(p) for p in app.rglob("*") if p.is_file() and p.name != "SHA256SUMS.json"}
+        actual = {str(p.relative_to(app)): packaging.digest(p) for p in app.rglob("*")
+                  if p.is_file() and (p != app / "SHA256SUMS.json" if system == "Linux" else p.name != "SHA256SUMS.json")}
         assert actual == manifest, "Payload hashes differ"
         for name in actual:
             parts = Path(name).parts

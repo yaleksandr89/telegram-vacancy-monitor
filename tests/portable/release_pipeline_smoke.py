@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -201,6 +202,11 @@ class ReleasePipeline(unittest.TestCase):
                 publish.assert_not_called()
 
     def test_linux_build_uses_runner_identity_before_host_smoke(self):
+        for fail_at in (None, "preflight", "smoke"):
+            with self.subTest(fail_at=fail_at):
+                self.check_linux_host_smoke(fail_at)
+
+    def check_linux_host_smoke(self, fail_at):
         with tempfile.TemporaryDirectory(prefix="tvm-ci-linux-") as directory:
             session = Path(directory)
             name = "tvm-" + session.name.lower()
@@ -208,6 +214,7 @@ class ReleasePipeline(unittest.TestCase):
             archive = session / "tvm-release-fixture/artifacts" / release.filename("linux")
             bwrap = session / "smoke-tools/usr/bin/bwrap"
             smoke_env = ["env", "PYTHONDONTWRITEBYTECODE=1", "PATH=/usr/bin:/bin"]
+            smoke = ["sudo", "-n", *smoke_env, sys.executable, ROOT / "tests/portable/runtime_smoke.py", "--bwrap", bwrap]
             events = mock.Mock()
 
             def run(command):
@@ -220,8 +227,10 @@ class ReleasePipeline(unittest.TestCase):
                     archive.parent.mkdir()
                     archive.touch()
                 if ROOT / "tests/portable/runtime_smoke.py" in command:
-                    self.assertTrue(archive.is_file())
-                    self.assertTrue((session / "native-smoke").is_dir())
+                    step = "preflight" if "--preflight" in command else "smoke"
+                    self.assertEqual(step == "smoke", archive.is_file())
+                    if step == fail_at:
+                        raise subprocess.CalledProcessError(1, command)
 
             def output(command):
                 if command[0] == "git":
@@ -245,28 +254,35 @@ class ReleasePipeline(unittest.TestCase):
                 mock.patch.object(bootstrap, "publish_verified", events.publish),
             ):
                 events.locate.return_value = archive
-                bootstrap.linux(session, source_sha)
+                outcome = self.assertRaises(subprocess.CalledProcessError) if fail_at else contextlib.nullcontext()
+                with outcome:
+                    bootstrap.linux(session, source_sha)
 
             container = next(call.args[0] for call in events.run.call_args_list if call.args[0][:2] == ["docker", "run"])
             self.assertIn(f"type=bind,source={ROOT},target=/src,readonly", container)
             self.assertIn(f"type=bind,source={session},target=/work", container)
             self.assertIn("GIT_CONFIG_VALUE_0=/src", container)
             self.assertNotIn("--user", container)
-            self.assertEqual(1, sum("--user" in call.args[0] for call in events.run.call_args_list))
+            self.assertEqual(int(fail_at != "preflight"), sum("--user" in call.args[0] for call in events.run.call_args_list))
             events.assert_has_calls([mock.call.run(["docker", "exec", name, "bash", "/src/build/ci/linux-snapshot.sh"])])
-            self.assertEqual([
-                mock.call.run(["sudo", "-n", *smoke_env, bwrap, "--unshare-user", "--unshare-pid", "--unshare-net",
-                               "--ro-bind", "/", "/", "/usr/bin/true"]),
+            expected = [
+                mock.call.run(["dpkg-deb", "--extract", session / "snapshot-inputs" / Path(bubble["path"]).name,
+                               session / "smoke-tools"]),
+                mock.call.run(["ldd", bwrap]),
+                mock.call.run([*smoke, "--preflight", session]),
                 mock.call.run(["docker", "exec", "--user", "2345:6789", "--env", "HOME=/work/build-home",
                                "--env", "CC=gcc-13", name, "python3", "/src/build/release.py", "--targets", "linux",
                                "--source-sha", source_sha, "--build-php", "/usr/bin/php8.5",
                                "--composer", "/work/composer.phar", "--cache", "/work/cache", "--output-dir", "/work"]),
                 mock.call.locate(session, "linux", source_sha),
-                mock.call.run(["sudo", "-n", *smoke_env, f"TMPDIR={session / 'native-smoke'}", sys.executable,
-                               ROOT / "tests/portable/runtime_smoke.py", archive, "--bwrap", bwrap]),
+                mock.call.run([*smoke, archive]),
                 mock.call.publish(session, archive, "linux", source_sha),
-                mock.call.run(["docker", "rm", "--force", name]),
-            ], events.mock_calls[-6:])
+            ]
+            expected = expected[:{"preflight": 3, "smoke": 6, None: 7}[fail_at]]
+            expected.append(mock.call.run(["docker", "rm", "--force", name]))
+            self.assertEqual(expected, events.mock_calls[-len(expected):])
+            if fail_at:
+                events.publish.assert_not_called()
 
     @unittest.skipUnless(sys.platform == "linux", "Нужен Linux для проверки PTY smoke")
     def test_linux_runtime_smoke_executes_explicit_bwrap_with_clean_path(self):
@@ -312,16 +328,95 @@ IFS= read -r keys; [ "$keys" = jjjjj ]
 """, encoding="utf-8")
             bwrap.chmod(0o700)
 
+            staged = []
+            extract = smoke.packaging.extract
+
+            def checked_extract(path, stage):
+                self.assertEqual(0o700, stat.S_IMODE(stage.stat().st_mode))
+                staged.append(stage)
+                extract(path, stage)
+
             def checked_menu(command, env):
                 self.assertEqual(str(bwrap), command[0])
                 self.assertEqual("/usr/bin:/bin", env["PATH"])
                 self.assertIn("if command -v php || command -v composer || command -v gum; then exit 77; fi; exec /app/vacancy-monitor",
                               command)
+                app = Path(command[command.index("--ro-bind") + 1])
+                self.assertEqual(staged[0], app.parent)
+                self.assertEqual(Path("/tmp"), app.parent.parent)
+                self.assertEqual(0o711, stat.S_IMODE(app.parent.stat().st_mode))
+                self.assertTrue(all(path.stat().st_mode & stat.S_IXOTH for path in (app, *app.parents)))
+                self.assertEqual(0o755, stat.S_IMODE((app / "runtime").stat().st_mode))
                 return real_menu(command, env)
 
-            with mock.patch.object(smoke, "real_menu", side_effect=checked_menu) as menu, contextlib.redirect_stdout(io.StringIO()):
-                smoke.main([str(archive), "--bwrap", str(bwrap)])
+            umask = os.umask(0o077)
+            try:
+                with (
+                    mock.patch.object(smoke.tempfile, "tempdir", str(session)),
+                    mock.patch.object(smoke.packaging, "extract", side_effect=checked_extract),
+                    mock.patch.object(smoke, "real_menu", side_effect=checked_menu) as menu,
+                    contextlib.redirect_stdout(io.StringIO()),
+                ):
+                    smoke.main([str(archive), "--bwrap", str(bwrap)])
+            finally:
+                os.umask(umask)
             menu.assert_called_once()
+            self.assertFalse(staged[0].exists())
+            self.assertEqual(0o700, stat.S_IMODE(session.stat().st_mode))
+
+    @unittest.skipUnless(sys.platform == "linux", "Нужен Linux для проверки bind source")
+    def test_linux_bind_preflight_and_private_staging(self):
+        smoke = load("runtime_smoke", ROOT / "tests/portable/runtime_smoke.py")
+        umask = os.umask(0o077)
+        try:
+            with tempfile.TemporaryDirectory(dir="/tmp") as private:
+                old_source = Path(private) / "Приложение with spaces"
+                old_source.mkdir(mode=0o755)
+                self.assertEqual(0o700, stat.S_IMODE(Path(private).stat().st_mode))
+                self.assertFalse(all(path.stat().st_mode & stat.S_IXOTH for path in (old_source, *old_source.parents)))
+                bwrap = Path(private) / "smoke-tools/usr/bin/bwrap"
+                bwrap.parent.mkdir(parents=True)
+                bwrap.touch(mode=0o700)
+                staged = []
+
+                def bind(command, *, env, check, timeout):
+                    self.assertEqual(str(bwrap), command[0])
+                    self.assertEqual("/usr/bin:/bin", env["PATH"])
+                    self.assertEqual(["--unshare-user", "--unshare-pid", "--unshare-net", "--die-with-parent"], command[1:5])
+                    self.assertEqual("/app", command[7])
+                    self.assertTrue(command[-1].endswith("exec /app/probe"))
+                    self.assertTrue(check)
+                    app = Path(command[6])
+                    self.assertEqual(old_source.name, app.name)
+                    self.assertTrue(all(path.stat().st_mode & stat.S_IXOTH for path in (app, *app.parents)))
+                    self.assertEqual(0o711, stat.S_IMODE(app.parent.stat().st_mode))
+                    self.assertEqual(0o755, stat.S_IMODE((app / "probe").stat().st_mode))
+                    staged.append(app.parent)
+                    raise subprocess.CalledProcessError(1, command)
+
+                with mock.patch.object(smoke.tempfile, "tempdir", private), mock.patch.object(smoke.subprocess, "run", side_effect=bind):
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        smoke.main(["--preflight", private, "--bwrap", str(bwrap)])
+                self.assertFalse(staged[0].exists())
+
+            with smoke.linux_staging() as directory:
+                staging = Path(directory)
+                app = staging / "Приложение with spaces"
+                app.mkdir()
+                (app / "config").mkdir()
+                fixture = app / "config/bot.ini"
+                fixture.touch()
+                with self.assertRaisesRegex(ValueError, "приватный"):
+                    with smoke.linux_mount_source(app):
+                        self.fail("private payload")
+                fixture.unlink()
+                (app / "link").symlink_to("config")
+                with self.assertRaisesRegex(ValueError, "тип"):
+                    with smoke.linux_mount_source(app):
+                        self.fail("symlink payload")
+                self.assertEqual(0o700, stat.S_IMODE(staging.stat().st_mode))
+        finally:
+            os.umask(umask)
 
     @unittest.skipUnless(os.name == "posix", "Нужен POSIX для проверки аргументов Unix smoke")
     def test_runtime_smoke_bwrap_path_contract(self):
@@ -338,7 +433,7 @@ IFS= read -r keys; [ "$keys" = jjjjj ]
                 for args, diagnostic in (
                     ([], "Для Linux требуется --bwrap"),
                     (["--bwrap", str(bwrap.relative_to(session))], "абсолютный путь"),
-                    (["--bwrap", str(unrelated)], "в сессии архива"),
+                    (["--bwrap", str(unrelated)], "в той же CI-сессии"),
                     (["--bwrap", str(bwrap)], "обычным исполняемым файлом"),
                 ):
                     with self.subTest(args=args), contextlib.redirect_stderr(io.StringIO()) as stderr:
@@ -351,6 +446,11 @@ IFS= read -r keys; [ "$keys" = jjjjj ]
                     smoke.main([str(archive), "--bwrap", str(bwrap)])
                 self.assertEqual(2, error.exception.code)
                 self.assertIn("без символьных ссылок", stderr.getvalue())
+                with mock.patch.object(smoke, "linux_preflight") as preflight, contextlib.redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit) as error:
+                        smoke.main(["--preflight", str(session), "--bwrap", str(bwrap)])
+                    self.assertEqual(2, error.exception.code)
+                    preflight.assert_not_called()
             with mock.patch.object(smoke.platform, "system", return_value="Darwin"), \
                  mock.patch.object(smoke.packaging, "digest", side_effect=FileNotFoundError("archive fixture")) as digest:
                 with self.assertRaisesRegex(FileNotFoundError, "archive fixture"):
