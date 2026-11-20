@@ -18,11 +18,25 @@ source /etc/os-release
 [[ -f /setup-php/src/scripts/linux.sh ]] || fail 'Требуется файл /setup-php/src/scripts/linux.sh.'
 # RU: Только известный одноразовый Ubuntu image; неожиданные apt sources запрещены.
 # EN: Only the known ephemeral Ubuntu image; reject unexpected apt sources.
-[[ ! -s /etc/apt/sources.list ]] || fail 'Файл /etc/apt/sources.list непустой.'
+[[ ! -L /etc/apt/sources.list ]] || fail 'Файл /etc/apt/sources.list является символьной ссылкой.'
+if [[ -e /etc/apt/sources.list ]]; then
+    [[ -f /etc/apt/sources.list ]] || fail 'Требуется обычный файл /etc/apt/sources.list.'
+    if [[ -s /etc/apt/sources.list ]]; then
+        digest=$(sha256sum < /etc/apt/sources.list) || fail 'Не удалось проверить SHA256 /etc/apt/sources.list.'
+        [[ ${digest%% *} == 8ce6407d5487bed332b5fcb4aab26dacf3f516d811c26792efb0c67f06f1958b ]] ||
+            fail 'SHA256 /etc/apt/sources.list не совпал с известным файлом комментариев.'
+    fi
+fi
+[[ -d /etc/apt/sources.list.d && ! -L /etc/apt/sources.list.d ]] ||
+    fail 'Требуется обычный каталог /etc/apt/sources.list.d.'
+[[ -f /etc/apt/sources.list.d/ubuntu.sources && ! -L /etc/apt/sources.list.d/ubuntu.sources ]] ||
+    fail 'Требуется обычный файл /etc/apt/sources.list.d/ubuntu.sources.'
+shopt -s dotglob
 for file in /etc/apt/sources.list.d/*; do
     [[ $file == /etc/apt/sources.list.d/ubuntu.sources ]] ||
         fail "В /etc/apt/sources.list.d/ ожидается только ubuntu.sources, получено $(printf '%q' "${file##*/}")."
 done
+shopt -u dotglob
 cat > /etc/apt/sources.list.d/ubuntu.sources <<'SOURCES'
 Types: deb
 URIs: https://snapshot.ubuntu.com/ubuntu/20261115T000000Z/

@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -269,25 +270,31 @@ class ReleasePipeline(unittest.TestCase):
 
     def test_linux_snapshot_guards(self):
         script = (ROOT / "build/ci/linux-snapshot.sh").read_text(encoding="utf-8")
-        # RU: Исполняем только проверки и отдельный маркер; перезапись sources и APT исключены.
-        # EN: Execute only the guards and the separate marker; omit the sources rewrite and APT.
-        guards, rewrite, rest = script.partition("\ncat > /etc/apt/sources.list.d/ubuntu.sources <<'SOURCES'\n")
-        self.assertTrue(rewrite)
-        before_update, update, _ = rest.partition("\napt-get update -o APT::Update::Error-Mode=any\n")
+        # RU: Перенаправляем запись в фикстуру и заменяем APT маркером вызова.
+        # EN: Redirect the source rewrite to the fixture and replace APT with a call marker.
+        prefix, update, _ = script.partition("\napt-get update -o APT::Update::Error-Mode=any\n")
         self.assertTrue(update)
-        marker = before_update.splitlines()[-1]
-        self.assertTrue(marker.startswith("printf "))
-        for path in ("/.dockerenv", "/etc/", "/src/", "/setup-php/"):
-            guards = guards.replace(" " + path, " " + path[1:])
-        mocks = 'id() { printf "%s\\n" "$TEST_UID"; }\nuname() { printf "%s\\n" "$TEST_ARCH"; }\n'
+        self.assertIn("cat > /etc/apt/sources.list.d/ubuntu.sources", prefix)
+        prefix = re.sub(r"(?<![\w./-])/(?=\.dockerenv\b|(?:etc|src|setup-php)/)", "", prefix)
+        sha256 = shutil.which("sha256sum")
+        checksum = shlex.quote(sha256) if sha256 else shlex.quote(release.executable("shasum")) + " -a 256"
+        mocks = ('id() { printf "%s\\n" "$TEST_UID"; }\nuname() { printf "%s\\n" "$TEST_ARCH"; }\n'
+                 f'sha256sum() {{ {checksum}; }}\n'
+                 f'cat() {{ : > rewrite-called; {shlex.quote(release.executable("cat"))}; }}\n'
+                 'apt-get() { printf "%s\\n" "$*" > apt-called; }\n')
         bash = release.executable("bash")
 
         allowed_source = "etc/apt/sources.list.d/ubuntu.sources"
         sources_list = "etc/apt/sources.list"
         os_release = "etc/os-release"
+        inert = ("# Ubuntu sources have moved to the /etc/apt/sources.list.d/ubuntu.sources\n"
+                 "# file, which uses the deb822 format. Use deb822-formatted .sources files\n"
+                 "# to manage package sources in the /etc/apt/sources.list.d/ directory.\n"
+                 "# See the sources.list(5) manual page for details.\n")
+        self.assertEqual(270, len(inert.encode()))
         fixtures = {".dockerenv": "", os_release: "ID=ubuntu\nVERSION_ID=24.04\n",
                     "src/build/common/ci-tools.json": "{}", "setup-php/src/scripts/linux.sh": "",
-                    allowed_source: ""}
+                    allowed_source: "stock source fixture\n"}
         for diagnostic, env_changes, file_changes in (
             ("TVM_CI_CONTAINER=1", {"TVM_CI_CONTAINER": ""}, {}),
             ("GITHUB_ACTIONS=true", {"GITHUB_ACTIONS": "false"}, {}),
@@ -299,11 +306,22 @@ class ReleasePipeline(unittest.TestCase):
             ("VERSION_ID=24.04", {}, {os_release: "ID=ubuntu\n"}),
             ("ci-tools.json", {}, {"src/build/common/ci-tools.json": None}),
             ("setup-php/src/scripts/linux.sh", {}, {"setup-php/src/scripts/linux.sh": None}),
-            ("sources.list непустой", {}, {sources_list: "# synthetic comment\n"}),
+            ("SHA256", {}, {sources_list: "# synthetic comment\n"}),
+            ("SHA256", {}, {sources_list: inert.replace("Ubuntu", "ubuntu")}),
+            ("SHA256", {}, {sources_list: inert[:-1]}),
+            ("SHA256", {}, {sources_list: inert + "deb https://invalid.example noble main\n"}),
+            ("SHA256", {}, {sources_list: "deb-src https://invalid.example noble main\n"}),
+            ("символьной ссылкой", {}, {sources_list: Path("expected"), "etc/apt/expected": inert}),
+            ("символьной ссылкой", {}, {sources_list: Path("absent")}),
+            ("обычный файл", {}, {sources_list: False}),
             ("ожидается только ubuntu.sources, получено extra.list", {}, {"etc/apt/sources.list.d/extra.list": ""}),
-            ("ожидается только ubuntu.sources", {}, {allowed_source: None}),
+            ("ожидается только ubuntu.sources, получено .extra", {}, {"etc/apt/sources.list.d/.extra": ""}),
+            ("обычный файл", {}, {allowed_source: None}),
+            ("обычный файл", {}, {allowed_source: Path("../stock"), "etc/apt/stock": ""}),
+            ("обычный файл", {}, {allowed_source: False}),
             (None, {}, {}),
             (None, {}, {sources_list: ""}),
+            (None, {}, {sources_list: inert}),
         ):
             with self.subTest(diagnostic=diagnostic, env=env_changes, files=file_changes), \
                     tempfile.TemporaryDirectory() as directory:
@@ -313,20 +331,117 @@ class ReleasePipeline(unittest.TestCase):
                     if content is not None:
                         path = base / name
                         path.parent.mkdir(parents=True, exist_ok=True)
-                        path.write_text(content, encoding="utf-8")
+                        if isinstance(content, Path):
+                            path.symlink_to(content)
+                        elif content is False:
+                            path.mkdir()
+                        else:
+                            path.write_bytes(content.encode("utf-8"))
                 env = dict(TVM_CI_CONTAINER="1", GITHUB_ACTIONS="true", TEST_UID="0", TEST_ARCH="x86_64",
                            PATH=str(base / "no-tools"), LC_ALL="C") | env_changes
-                result = subprocess.run([bash, "--noprofile", "--norc", "-c", mocks + guards + "\n" + marker],
+                result = subprocess.run([bash, "--noprofile", "--norc", "-c", mocks + prefix + update],
                                         cwd=base, env=env, capture_output=True, encoding="utf-8", timeout=10)
                 if diagnostic is None:
                     self.assertEqual(0, result.returncode, result.stderr)
                     self.assertEqual("", result.stderr)
                     self.assertIn("проверки пройдены, запускается apt-get update", result.stdout)
+                    self.assertTrue((base / "rewrite-called").is_file())
+                    self.assertEqual("update -o APT::Update::Error-Mode=any\n", (base / "apt-called").read_text())
+                    self.assertIn(bootstrap.TOOLS["linux"]["base_url"], (base / allowed_source).read_text())
                 else:
                     self.assertNotEqual(0, result.returncode)
                     self.assertEqual("", result.stdout)
                     self.assertTrue(result.stderr.startswith("Linux snapshot: "), result.stderr)
                     self.assertIn(diagnostic, result.stderr)
+                    self.assertFalse((base / "rewrite-called").exists())
+                    self.assertFalse((base / "apt-called").exists())
+                    if allowed_source not in file_changes:
+                        self.assertEqual(fixtures[allowed_source], (base / allowed_source).read_text())
+
+    def test_macos_installation_requires_both_verified_assets(self):
+        config = copy.deepcopy(bootstrap.TOOLS["macos_build_php"])
+        installer = b"""#!/bin/bash
+set -eu
+[[ $# == 5 && $1 == 8.5 && $2 == release && $3 == nts && -z $5 ]]
+[[ ${4##*/} == php_8.5-nts-release+darwin_arm64.tar.zst && -f $4 ]]
+[[ $(< "$4.sha256") == "$TEST_ARCHIVE_SHA  ${4##*/}" ]]
+[[ $(< "$4") == 'offline archive fixture' ]]
+printf 'verified local archive\n' > "$TEST_CALLED"
+exit 42
+"""
+        archive = b"offline archive fixture\n"
+        release_base = "https://github.com/shivammathur/php-darwin/releases/download/php-8.5/"
+        self.assertEqual(release_base + "install.sh", config["installer"]["url"])
+        self.assertEqual(release_base + "php_8.5-nts-release%2Bdarwin_arm64." +
+                         config["archive"]["sha256"] + ".tar.zst", config["archive"]["url"])
+        for key, data in (("installer", installer), ("archive", archive)):
+            self.assertRegex(config[key]["sha256"], r"^[0-9a-f]{64}$")
+            config[key]["sha256"] = hashlib.sha256(data).hexdigest()
+        bash = release.executable("bash")
+        wrapper = ROOT / "build/ci/macos-php.sh"
+        for key, variant in (("installer", "missing"), ("installer", "altered"),
+                             ("archive", "missing"), ("archive", "altered"), (None, None)):
+            with self.subTest(key=key, variant=variant), tempfile.TemporaryDirectory() as directory:
+                base = Path(directory)
+                for name in ("ci", "common", "bin", "tmp"):
+                    (base / name).mkdir()
+                shutil.copyfile(wrapper, base / "ci" / wrapper.name)
+                (base / "common/ci-tools.json").write_text(json.dumps({"macos_build_php": config}))
+                for asset, data in (("installer", installer), ("archive", archive)):
+                    if (key, variant) != (asset, "missing"):
+                        (base / asset).write_bytes(data + (b"# altered\n" if (key, variant) == (asset, "altered") else b""))
+                for name, code in {
+                    "uname": 'case "$1" in -s) echo Darwin;; -m) echo arm64;; *) exit 1;; esac\n',
+                    "brew": "exit 99\n",
+                    "tar": "exit 99\n",
+                    "zstd": "exit 99\n",
+                    "curl": """[[ $1 == --disable ]] || exit 98
+out=
+while [[ $# -gt 1 ]]; do
+    if [[ $1 == --output ]]; then out=$2; shift; fi
+    shift
+done
+printf '%s\n' "$1" >> "$TEST_DOWNLOADS"
+case "$1" in
+    "$TEST_INSTALLER_URL") asset=installer;;
+    "$TEST_ARCHIVE_URL") asset=archive;;
+    *) exit 97;;
+esac
+[[ -f $TEST_ROOT/$asset && -n $out ]] || exit 22
+cat "$TEST_ROOT/$asset" > "$out"
+""",
+                }.items():
+                    path = base / "bin" / name
+                    path.write_text("#!" + bash + "\n" + code)
+                    path.chmod(0o700)
+                path_file = base / "github-path"
+                path_file.touch()
+                env = dict(PATH=str(base / "bin") + os.pathsep + os.defpath,
+                           GITHUB_ACTIONS="true", RUNNER_OS="macOS", RUNNER_ARCH="ARM64",
+                           RUNNER_TEMP=str(base / "tmp"), GITHUB_PATH=str(path_file),
+                           PHP_DARWIN_EXTENSIONS="unwanted", INPUT_EXTENSIONS="unwanted",
+                           TEST_ROOT=str(base), TEST_CALLED=str(base / "called"),
+                           TEST_DOWNLOADS=str(base / "downloads"),
+                           TEST_INSTALLER_URL=config["installer"]["url"], TEST_ARCHIVE_URL=config["archive"]["url"],
+                           TEST_ARCHIVE_SHA=config["archive"]["sha256"])
+                env["PATH"] += os.pathsep + os.pathsep.join(
+                    str(Path(release.executable(tool)).parent) for tool in ("jq", "python3"))
+                result = subprocess.run([bash, base / "ci" / wrapper.name], env=env, capture_output=True,
+                                        encoding="utf-8", timeout=15)
+                self.assertEqual(1, result.returncode, result.stderr)
+                self.assertEqual("", path_file.read_text())
+                self.assertEqual([], list((base / "tmp").iterdir()))
+                urls = [config["installer"]["url"]]
+                if key != "installer":
+                    urls.append(config["archive"]["url"])
+                self.assertEqual(urls, (base / "downloads").read_text().splitlines())
+                if key is None:
+                    self.assertEqual("verified local archive\n", (base / "called").read_text())
+                    self.assertIn("Установка проверенного архива завершилась ошибкой", result.stderr)
+                else:
+                    self.assertFalse((base / "called").exists())
+                    diagnostic = "SHA256 не совпал для" if variant == "altered" else "Не удалось скачать"
+                    self.assertIn(f"{diagnostic} {key}", result.stderr)
 
     def test_workflow_contract(self):
         text = (ROOT / release.WORKFLOW).read_text()
@@ -346,6 +461,13 @@ class ReleasePipeline(unittest.TestCase):
             if "uses:" in line:
                 self.assertRegex(line, r"@[0-9a-f]{40}(?: |$)")
         config = bootstrap.TOOLS
+        steps = re.split(r"(?m)^      - ", text)
+        setup, = [step for step in steps if "uses: shivammathur/setup-php@" in step]
+        self.assertIn("if: matrix.target == 'windows'\n", setup)
+        self.assertIn("setup-php@" + config["setup_php"]["commit"], setup)
+        mac, = [step for step in steps if "bash build/ci/macos-php.sh" in step]
+        self.assertIn("if: matrix.target == 'macos'\n", mac)
+        self.assertLess(text.index("bash build/ci/macos-php.sh"), text.index("python3 build/ci/bootstrap.py"))
         self.assertRegex(config["linux"]["image"], r"^ubuntu@sha256:[0-9a-f]{64}$")
         self.assertEqual("20261115T000000Z", config["linux"]["snapshot"])
         for key in ("composer", "seven_zip"):

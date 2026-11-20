@@ -13,10 +13,12 @@ $script:Language = 0
 $Texts = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'messages.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $Gum = Join-Path $Root 'runtime/gum.exe'
 $Php = Join-Path $Root 'runtime/php/php.exe'
-$Inspector = Join-Path $PSScriptRoot 'inspect.php'
-$script:PhpArgs = @('-n', '-d', ('extension_dir=' + (Join-Path $Root 'runtime/php/ext')),
+# RU: PHP читает параметры -d до перехода на Unicode-аргументы. Пути разрешаются от корня приложения.
+# EN: PHP reads -d options before switching to Unicode arguments. Paths resolve from the app root.
+$Inspector = 'src/ui/windows/inspect.php'
+$script:PhpArgs = @('-n', '-d', 'extension_dir=runtime/php/ext',
     '-d', 'extension=curl', '-d', 'extension=mbstring', '-d', 'extension=pdo_sqlite',
-    '-d', ('curl.cainfo=' + (Join-Path $Root 'runtime/cacert.pem')),
+    '-d', 'curl.cainfo=runtime/cacert.pem',
     '-d', 'display_errors=0', '-d', 'log_errors=0')
 foreach ($Key in @('PHPRC', 'PHP_INI_SCAN_DIR', 'PHP_BINARY', 'OPENSSL_CONF', 'OPENSSL_MODULES')) {
     [Environment]::SetEnvironmentVariable($Key, $null, 'Process')
@@ -25,8 +27,10 @@ $env:PATH = (Join-Path $Root 'runtime/php') + ';' + (Join-Path $env:SystemRoot '
 function Text([string]$Key) { return $Texts.$Key[$script:Language] }
 function AppPhp([string[]]$Arguments) {
     $ErrorActionPreference = 'Continue'
+    $global:LASTEXITCODE = $null
     & $Php -d display_startup_errors=0 @script:PhpArgs @Arguments 2>$null
-    $script:AppStatus = $LASTEXITCODE
+    $script:AppStatus = $global:LASTEXITCODE
+    if ($null -eq $script:AppStatus) { $script:AppStatus = 70 }
 }
 function InvokeBot([string]$Action) {
     $script:DiagnosticCategory = 'runtime'

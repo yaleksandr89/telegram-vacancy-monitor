@@ -2,7 +2,19 @@
   "setup_php": {
     "repository": "https://github.com/shivammathur/setup-php.git",
     "commit": "f3e473d116dcccaddc5834248c87452386958240",
-    "reason": "CI-only PHP 8.5. Owner trusts maintained mutable upstream bootstrap on all three platforms; not a transitive cryptographic pin."
+    "reason": "CI-only PHP 8.5 for Linux and Windows. Owner trusts the maintained upstream bootstrap; its transitive inputs are mutable."
+  },
+  "macos_build_php": {
+    "installer": {
+      "url": "https://github.com/shivammathur/php-darwin/releases/download/php-8.5/install.sh",
+      "sha256": "05197f529034bcc9143f703aa8c694412d904731608c35d5e86473c8511e4e78"
+    },
+    "archive": {
+      "url": "https://github.com/shivammathur/php-darwin/releases/download/php-8.5/php_8.5-nts-release%2Bdarwin_arm64.6049e8483baca0de9eed80a0d691a565cb7d100c01713890232bd2ecc8c78770.tar.zst",
+      "sha256": "6049e8483baca0de9eed80a0d691a565cb7d100c01713890232bd2ecc8c78770",
+      "local_name": "php_8.5-nts-release+darwin_arm64.tar.zst"
+    },
+    "reason": "Build-only PHP on macos-15 ARM64. Independently pin the GitHub release installer and archive including its embedded installer. Use local-archive mode without extension packs."
   },
   "composer": {
     "version": "2.11.2",
