@@ -160,7 +160,10 @@ def linux(session, source_sha):
         version = release.output(["docker", "exec", name, "/usr/bin/php8.5", "/work/composer.phar", "--no-plugins", "--version"])
         if not version.startswith("Composer version " + TOOLS["composer"]["version"] + " "):
             raise ValueError("CI: версия Composer не совпала")
-        run(["docker", "exec", "--env", "CC=gcc-13", name, "python3", "/src/build/release.py", "--targets", "linux",
+        build_user = f"{os.getuid()}:{os.getgid()}"
+        (session / "build-home").mkdir(mode=0o700)
+        run(["docker", "exec", "--user", build_user, "--env", "HOME=/work/build-home", "--env", "CC=gcc-13",
+             name, "python3", "/src/build/release.py", "--targets", "linux",
              "--source-sha", source_sha, "--build-php", "/usr/bin/php8.5", "--composer", "/work/composer.phar",
              "--cache", "/work/cache", "--output-dir", "/work"])
         artifact = locate_artifact(session, "linux", source_sha)

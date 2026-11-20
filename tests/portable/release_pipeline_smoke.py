@@ -200,6 +200,99 @@ class ReleasePipeline(unittest.TestCase):
                     bootstrap.native("macos", session, "a" * 40)
                 publish.assert_not_called()
 
+    def test_linux_build_uses_runner_identity_before_host_smoke(self):
+        with tempfile.TemporaryDirectory(prefix="tvm-ci-linux-") as directory:
+            session = Path(directory)
+            name = "tvm-" + session.name.lower()
+            source_sha = "a" * 40
+            archive = session / "tvm-release-fixture/artifacts" / release.filename("linux")
+            bwrap = session / "smoke-tools/usr/bin/bwrap"
+            smoke_env = ["env", "PYTHONDONTWRITEBYTECODE=1", f"PATH={bwrap.parent}:/usr/bin:/bin"]
+            events = mock.Mock()
+
+            def run(command):
+                if "/src/build/release.py" in command:
+                    home = session / "build-home"
+                    self.assertEqual(0o700, home.stat().st_mode & 0o777)
+                    (home / "fixture").touch()
+                    (session / "cache").mkdir()
+                    archive.parent.parent.mkdir(mode=0o700)
+                    archive.parent.mkdir()
+                    archive.touch()
+                if ROOT / "tests/portable/runtime_smoke.py" in command:
+                    self.assertTrue(archive.is_file())
+                    self.assertTrue((session / "native-smoke").is_dir())
+
+            def output(command):
+                if command[0] == "git":
+                    return bootstrap.TOOLS["setup_php"]["commit"]
+                return "Composer version " + bootstrap.TOOLS["composer"]["version"] + " synthetic"
+
+            events.run.side_effect = run
+            bubble = bootstrap.TOOLS["linux"]["packages"]["bubblewrap"]
+            with (
+                mock.patch.object(bootstrap, "Path", side_effect=lambda value:
+                                  mock.Mock(exists=lambda: True) if value.startswith("/") else Path(value)),
+                mock.patch.object(bootstrap.os, "openpty", return_value=(), create=True),
+                mock.patch.object(bootstrap.os, "getuid", return_value=2345, create=True),
+                mock.patch.object(bootstrap.os, "getgid", return_value=6789, create=True),
+                mock.patch.object(bootstrap.release, "executable"),
+                mock.patch.object(bootstrap.release, "output", side_effect=output),
+                mock.patch.object(bootstrap.release, "sha256", return_value=bubble["sha256"]),
+                mock.patch.object(bootstrap, "composer"),
+                mock.patch.object(bootstrap, "run", events.run),
+                mock.patch.object(bootstrap, "locate_artifact", events.locate),
+                mock.patch.object(bootstrap, "publish_verified", events.publish),
+            ):
+                events.locate.return_value = archive
+                bootstrap.linux(session, source_sha)
+
+            container = next(call.args[0] for call in events.run.call_args_list if call.args[0][:2] == ["docker", "run"])
+            self.assertIn(f"type=bind,source={ROOT},target=/src,readonly", container)
+            self.assertIn(f"type=bind,source={session},target=/work", container)
+            self.assertIn("GIT_CONFIG_VALUE_0=/src", container)
+            self.assertNotIn("--user", container)
+            self.assertEqual(1, sum("--user" in call.args[0] for call in events.run.call_args_list))
+            events.assert_has_calls([mock.call.run(["docker", "exec", name, "bash", "/src/build/ci/linux-snapshot.sh"])])
+            self.assertEqual([
+                mock.call.run(["sudo", "-n", *smoke_env, bwrap, "--unshare-user", "--unshare-pid", "--unshare-net",
+                               "--ro-bind", "/", "/", "/usr/bin/true"]),
+                mock.call.run(["docker", "exec", "--user", "2345:6789", "--env", "HOME=/work/build-home",
+                               "--env", "CC=gcc-13", name, "python3", "/src/build/release.py", "--targets", "linux",
+                               "--source-sha", source_sha, "--build-php", "/usr/bin/php8.5",
+                               "--composer", "/work/composer.phar", "--cache", "/work/cache", "--output-dir", "/work"]),
+                mock.call.locate(session, "linux", source_sha),
+                mock.call.run(["sudo", "-n", *smoke_env, f"TMPDIR={session / 'native-smoke'}", sys.executable,
+                               ROOT / "tests/portable/runtime_smoke.py", archive]),
+                mock.call.publish(session, archive, "linux", source_sha),
+                mock.call.run(["docker", "rm", "--force", name]),
+            ], events.mock_calls[-6:])
+
+    def test_locate_linux_artifact_requires_one_verified_archive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            artifacts = base / "tvm-release-first/artifacts"
+            artifacts.mkdir(parents=True)
+            source_sha = "b" * 40
+            with self.assertRaisesRegex(ValueError, "ровно один итоговый архив"):
+                bootstrap.locate_artifact(base, "linux", source_sha)
+            root, archive, _ = self.fixture(artifacts, "linux")
+            sidecar = archive.with_name(archive.name + ".sha256")
+            sidecar_bytes = sidecar.read_bytes()
+            sidecar.unlink()
+            with self.assertRaises(FileNotFoundError):
+                bootstrap.locate_artifact(base, "linux", source_sha)
+            sidecar.write_bytes(sidecar_bytes)
+            with mock.patch.object(bootstrap.release, "ROOT", root), \
+                 mock.patch.object(bootstrap.release.subprocess, "check_output",
+                                   side_effect=lambda command, **_: (root / command[-1].removeprefix(source_sha + ":")).read_bytes()):
+                self.assertEqual(archive, bootstrap.locate_artifact(base, "linux", source_sha))
+            second = base / "tvm-release-second/artifacts"
+            second.mkdir(parents=True)
+            shutil.copyfile(archive, second / archive.name)
+            with self.assertRaisesRegex(ValueError, "ровно один итоговый архив"):
+                bootstrap.locate_artifact(base, "linux", source_sha)
+
     def test_snapshot_wrong_signer_prevents_package_downloads(self):
         with tempfile.TemporaryDirectory() as directory:
             with mock.patch.object(bootstrap, "download", return_value=Path(directory) / "InRelease") as fetch, \
