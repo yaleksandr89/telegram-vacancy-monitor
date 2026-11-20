@@ -1,21 +1,19 @@
 # Telegram Vacancy Monitor
 
-[![Исходный код](https://img.shields.io/badge/source-yaleksandr89%2Ftelegram--vacancy--monitor-blue.svg?style=flat-square)](https://github.com/yaleksandr89/telegram-vacancy-monitor)
+[![Source Code](https://img.shields.io/badge/source-yaleksandr89%2Ftelegram--vacancy--monitor-blue.svg?style=flat-square)](https://github.com/yaleksandr89/telegram-vacancy-monitor)
 [![CI](https://img.shields.io/github/actions/workflow/status/yaleksandr89/telegram-vacancy-monitor/ci.yml?branch=master&style=flat-square&label=CI)](https://github.com/yaleksandr89/telegram-vacancy-monitor/actions/workflows/ci.yml)
 [![PHP](https://img.shields.io/badge/PHP-%5E8.5-777BB4.svg?style=flat-square&logo=php&logoColor=white)](composer.json)
-[![Лицензия MIT](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](LICENSE)
+[![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](LICENSE)
 
 Приложение для персонального отбора вакансий с помощью ИИ. Отправьте или перешлите вакансию боту в Телеграмме. Приложение сохранит её и пришлёт оценку с учётом вашего опыта, предпочтений и ограничений.
 
 Подходит тем, кто собирает предложения из разных источников и хочет быстрее решать, на какие стоит откликаться. Критерии задаются в профиле кандидата и инструкциях оценки. Примеры их оформления приведены в [руководстве](docs/examples/vacancy-analysis.md). Подключить можно локальную или облачную модель ИИ через интерфейс Chat Completions.
 
-### Демонстрация
+## Демонстрация
 
-<a href="https://github.com/user-attachments/assets/afdc1b8d-c4bb-49d4-b82f-67436f11f69c">
-  <img src="docs/images/standalone/05-demo-preview.png" width="460" alt="Демонстрация локального приложения на Windows">
-</a>
+Локальное приложение на Windows · LM Studio · модель `qwen/qwen3.5-9b`.
 
-*Windows · LM Studio · модель `qwen/qwen3.5-9b`. Нажмите на изображение, чтобы открыть запись.*
+https://github.com/user-attachments/assets/afdc1b8d-c4bb-49d4-b82f-67436f11f69c
 
 ## Возможности
 
