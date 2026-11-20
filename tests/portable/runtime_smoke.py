@@ -1,3 +1,4 @@
+import argparse
 import fcntl
 import hashlib
 import importlib.util
@@ -82,10 +83,42 @@ def real_menu(command, env):
     return bytes(transcript)
 
 
-def main():
-    if len(sys.argv) != 2:
-        raise SystemExit("Использование: PortableRuntimeSmoke.sh /path/bundle.tar.gz")
-    archive = Path(sys.argv[1]).resolve()
+def linux_menu(app, bwrap):
+    # RU: Пустое mount namespace: ни PHP, ни Composer, ни расширений хоста.
+    # EN: Empty mount namespace: no host PHP, Composer or PHP extensions.
+    command = [str(bwrap), "--unshare-user", "--unshare-pid", "--unshare-net", "--die-with-parent",
+               "--ro-bind", str(app), "/app", "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
+               "--ro-bind", "/bin/bash", "/bin/bash", "--ro-bind", "/usr/bin/dirname", "/usr/bin/dirname"]
+    command += ['--ro-bind', '/usr/bin/tput', '/usr/bin/tput', '--ro-bind', '/usr/share/terminfo', '/usr/share/terminfo']
+    for name in ["/lib/x86_64-linux-gnu/libtinfo.so.6", "/lib/x86_64-linux-gnu/libc.so.6",
+                 "/lib64/ld-linux-x86-64.so.2"]:
+        command += ["--ro-bind", name, name]
+    command += ["--chdir", "/tmp", "/bin/bash", "-c",
+                'if command -v php || command -v composer || command -v gum; then exit 77; fi; exec /app/vacancy-monitor']
+    clean_env = dict(os.environ, TERM="xterm-256color", PATH="/usr/bin:/bin", LANG="C", LC_ALL="C")
+    transcript = real_menu(command, clean_env)
+    assert b'\x1b[2J' in transcript, 'Terminal screen was not cleared'
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("archive", type=Path)
+    parser.add_argument("--bwrap", type=Path, help="Абсолютный путь к bwrap из сессии Linux CI")
+    args = parser.parse_args(argv)
+    archive = args.archive.resolve()
+    system = platform.system()
+    if system == "Linux":
+        if args.bwrap is None:
+            parser.error("Для Linux требуется --bwrap.")
+        release_dir = archive.parent.parent
+        expected = release_dir.parent / "smoke-tools/usr/bin/bwrap"
+        if (archive.parent.name != "artifacts" or not release_dir.name.startswith("tvm-release-")
+                or args.bwrap != expected):
+            parser.error("--bwrap должен указывать на абсолютный путь к smoke-tools/usr/bin/bwrap в сессии архива.")
+        if args.bwrap.resolve() != expected or not args.bwrap.is_file() or not os.access(args.bwrap, os.X_OK):
+            parser.error("--bwrap должен быть обычным исполняемым файлом без символьных ссылок.")
+    elif args.bwrap is not None:
+        parser.error("--bwrap применяется только в Linux.")
     sidecar = archive.with_name(archive.name + ".sha256")
     assert packaging.digest(archive) == sidecar.read_text().split()[0], "Archive SHA256 mismatch"
     with tempfile.TemporaryDirectory(prefix="tvm-portable-") as temporary:
@@ -102,7 +135,7 @@ def main():
             assert not (parts[0] in ("var", "public", ".git", "tests") or name == "config/bot.ini"
                         or name.startswith("config/profile/local/")), "Private/server payload"
         provenance = json.loads((app / "runtime/PROVENANCE.json").read_text())
-        target = {"Linux": "linux-x86_64", "Darwin": "macos-arm64"}.get(platform.system())
+        target = {"Linux": "linux-x86_64", "Darwin": "macos-arm64"}.get(system)
         assert target == provenance["target"], "Wrong target"
         assert (platform.machine() == ("x86_64" if target == "linux-x86_64" else "arm64")), "Wrong architecture"
         runtime = app / "runtime"
@@ -120,20 +153,7 @@ def main():
         assert b"v2.0.2" in version
         assert (app / "vacancy-monitor").is_file()
         if target == "linux-x86_64":
-            # RU: Пустое mount namespace: ни PHP, ни Composer, ни расширений хоста.
-            # EN: Empty mount namespace: no host PHP, Composer or PHP extensions.
-            command = ["bwrap", "--unshare-user", "--unshare-pid", "--unshare-net", "--die-with-parent",
-                       "--ro-bind", str(app), "/app", "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
-                       "--ro-bind", "/bin/bash", "/bin/bash", "--ro-bind", "/usr/bin/dirname", "/usr/bin/dirname"]
-            command += ['--ro-bind', '/usr/bin/tput', '/usr/bin/tput', '--ro-bind', '/usr/share/terminfo', '/usr/share/terminfo']
-            for name in ["/lib/x86_64-linux-gnu/libtinfo.so.6", "/lib/x86_64-linux-gnu/libc.so.6",
-                         "/lib64/ld-linux-x86-64.so.2"]:
-                command += ["--ro-bind", name, name]
-            command += ["--chdir", "/tmp", "/bin/bash", "-c",
-                        'if command -v php || command -v composer || command -v gum; then exit 77; fi; exec /app/vacancy-monitor']
-            clean_env = dict(os.environ, TERM="xterm-256color", PATH="/usr/bin:/bin", LANG="C", LC_ALL="C")
-            transcript = real_menu(command, clean_env)
-            assert b'\x1b[2J' in transcript, 'Terminal screen was not cleared'
+            linux_menu(app, args.bwrap)
         else:
             real_menu([str(app / "vacancy-monitor")], dict(os.environ, TERM="xterm-256color", PATH="/usr/bin:/bin"))
         assert not (app / "config/bot.ini").exists()

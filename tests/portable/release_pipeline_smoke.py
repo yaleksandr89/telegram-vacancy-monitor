@@ -207,7 +207,7 @@ class ReleasePipeline(unittest.TestCase):
             source_sha = "a" * 40
             archive = session / "tvm-release-fixture/artifacts" / release.filename("linux")
             bwrap = session / "smoke-tools/usr/bin/bwrap"
-            smoke_env = ["env", "PYTHONDONTWRITEBYTECODE=1", f"PATH={bwrap.parent}:/usr/bin:/bin"]
+            smoke_env = ["env", "PYTHONDONTWRITEBYTECODE=1", "PATH=/usr/bin:/bin"]
             events = mock.Mock()
 
             def run(command):
@@ -263,10 +263,99 @@ class ReleasePipeline(unittest.TestCase):
                                "--composer", "/work/composer.phar", "--cache", "/work/cache", "--output-dir", "/work"]),
                 mock.call.locate(session, "linux", source_sha),
                 mock.call.run(["sudo", "-n", *smoke_env, f"TMPDIR={session / 'native-smoke'}", sys.executable,
-                               ROOT / "tests/portable/runtime_smoke.py", archive]),
+                               ROOT / "tests/portable/runtime_smoke.py", archive, "--bwrap", bwrap]),
                 mock.call.publish(session, archive, "linux", source_sha),
                 mock.call.run(["docker", "rm", "--force", name]),
             ], events.mock_calls[-6:])
+
+    @unittest.skipUnless(sys.platform == "linux", "Нужен Linux для проверки PTY smoke")
+    def test_linux_runtime_smoke_executes_explicit_bwrap_with_clean_path(self):
+        smoke = load("runtime_smoke", ROOT / "tests/portable/runtime_smoke.py")
+        real_menu = smoke.real_menu
+        with tempfile.TemporaryDirectory(prefix="tvm-ci-linux-") as directory:
+            session = Path(directory).resolve()
+            archive = session / "tvm-release-fixture/artifacts" / release.filename("linux")
+            archive.parent.mkdir(parents=True)
+            files = {
+                "runtime/PROVENANCE.json": b'{"target":"linux-x86_64"}',
+                "runtime/php": b"\x7fELF\x02" + bytes(13) + b"\x3e\x00",
+                "runtime/ld-linux-x86-64.so.2": b"#!/bin/sh\nexit 0\n",
+                "runtime/gum": b"#!/bin/sh\nprintf 'gum v2.0.2\\n'\n",
+                "vacancy-monitor": b"#!/bin/sh\nprintf 'App files are missing or corrupt\\n' >&2\nexit 1\n",
+            }
+            manifest = {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}
+            files["SHA256SUMS.json"] = json.dumps(manifest).encode()
+            with tarfile.open(archive, "w:gz") as stream:
+                for name, data in files.items():
+                    member = tarfile.TarInfo("telegram-vacancy-monitor/" + name)
+                    member.size = len(data)
+                    member.mode = 0o755 if data.startswith(b"#!") else 0o644
+                    stream.addfile(member, io.BytesIO(data))
+            archive.with_name(archive.name + ".sha256").write_text(release.sha256(archive) + "  " + archive.name + "\n")
+
+            bwrap = session / "smoke-tools/usr/bin/bwrap"
+            bwrap.parent.mkdir(parents=True)
+            bwrap.write_text("""#!/bin/sh
+set -eu
+[ "$PATH" = /usr/bin:/bin ]
+printf '\\033[2J'
+printf 'Запустить мониторинг\\n'
+IFS= read -r keys; [ "$keys" = jjj ]
+printf 'Быстрый старт\\n'
+IFS= read -r keys; [ -z "$keys" ]
+printf 'Распакуйте\\n'
+IFS= read -r keys; [ -z "$keys" ]
+printf 'Выберите тему\\n'
+IFS= read -r keys; [ "$keys" = jjjjj ]
+printf 'Запустить мониторинг\\n'
+IFS= read -r keys; [ "$keys" = jjjjj ]
+""", encoding="utf-8")
+            bwrap.chmod(0o700)
+
+            def checked_menu(command, env):
+                self.assertEqual(str(bwrap), command[0])
+                self.assertEqual("/usr/bin:/bin", env["PATH"])
+                self.assertIn("if command -v php || command -v composer || command -v gum; then exit 77; fi; exec /app/vacancy-monitor",
+                              command)
+                return real_menu(command, env)
+
+            with mock.patch.object(smoke, "real_menu", side_effect=checked_menu) as menu, contextlib.redirect_stdout(io.StringIO()):
+                smoke.main([str(archive), "--bwrap", str(bwrap)])
+            menu.assert_called_once()
+
+    @unittest.skipUnless(os.name == "posix", "Нужен POSIX для проверки аргументов Unix smoke")
+    def test_runtime_smoke_bwrap_path_contract(self):
+        smoke = load("runtime_smoke", ROOT / "tests/portable/runtime_smoke.py")
+        with tempfile.TemporaryDirectory(prefix="tvm-ci-linux-") as directory:
+            session = Path(directory).resolve()
+            archive = session / "tvm-release-fixture/artifacts" / release.filename("linux")
+            bwrap = session / "smoke-tools/usr/bin/bwrap"
+            bwrap.parent.mkdir(parents=True)
+            unrelated = session / "unrelated/bwrap"
+            unrelated.parent.mkdir()
+            unrelated.touch(mode=0o700)
+            with mock.patch.object(smoke.platform, "system", return_value="Linux"):
+                for args, diagnostic in (
+                    ([], "Для Linux требуется --bwrap"),
+                    (["--bwrap", str(bwrap.relative_to(session))], "абсолютный путь"),
+                    (["--bwrap", str(unrelated)], "в сессии архива"),
+                    (["--bwrap", str(bwrap)], "обычным исполняемым файлом"),
+                ):
+                    with self.subTest(args=args), contextlib.redirect_stderr(io.StringIO()) as stderr:
+                        with self.assertRaises(SystemExit) as error:
+                            smoke.main([str(archive), *args])
+                        self.assertEqual(2, error.exception.code)
+                        self.assertIn(diagnostic, stderr.getvalue())
+                bwrap.symlink_to(unrelated)
+                with contextlib.redirect_stderr(io.StringIO()) as stderr, self.assertRaises(SystemExit) as error:
+                    smoke.main([str(archive), "--bwrap", str(bwrap)])
+                self.assertEqual(2, error.exception.code)
+                self.assertIn("без символьных ссылок", stderr.getvalue())
+            with mock.patch.object(smoke.platform, "system", return_value="Darwin"), \
+                 mock.patch.object(smoke.packaging, "digest", side_effect=FileNotFoundError("archive fixture")) as digest:
+                with self.assertRaisesRegex(FileNotFoundError, "archive fixture"):
+                    smoke.main([str(archive)])
+                digest.assert_called_once_with(archive)
 
     def test_locate_linux_artifact_requires_one_verified_archive(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -153,7 +153,7 @@ def linux(session, source_sha):
         run(["dpkg-deb", "--extract", deb, smoke_tools])
         bwrap = smoke_tools / "usr/bin/bwrap"
         run(["ldd", bwrap])
-        smoke_env = ["env", "PYTHONDONTWRITEBYTECODE=1", "PATH=" + str(bwrap.parent) + ":/usr/bin:/bin"]
+        smoke_env = ["env", "PYTHONDONTWRITEBYTECODE=1", "PATH=/usr/bin:/bin"]
         # RU: Native smoke вне Docker: без изменения seccomp, AppArmor или пакетов хоста.
         # EN: Native smoke outside Docker: no host seccomp, AppArmor or package changes.
         run(["sudo", "-n", *smoke_env, bwrap, "--unshare-user", "--unshare-pid", "--unshare-net", "--ro-bind", "/", "/", "/usr/bin/true"])
@@ -170,7 +170,7 @@ def linux(session, source_sha):
         temporary = session / "native-smoke"
         temporary.mkdir()
         run(["sudo", "-n", *smoke_env, "TMPDIR=" + str(temporary), sys.executable,
-             ROOT / "tests/portable/runtime_smoke.py", artifact])
+             ROOT / "tests/portable/runtime_smoke.py", artifact, "--bwrap", bwrap])
         publish_verified(session, artifact, "linux", source_sha)
     finally:
         if started:
