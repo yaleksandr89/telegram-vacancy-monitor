@@ -1,5 +1,11 @@
 # Участие в разработке
 
+## Выберите язык
+
+| Русский | English | Español | 中文 | Français | Deutsch |
+| --- | --- | --- | --- | --- | --- |
+| **Выбран** | [English](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/contributing/CONTRIBUTING_en.md) | [Español](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/contributing/CONTRIBUTING_es.md) | [中文](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/contributing/CONTRIBUTING_zh.md) | [Français](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/contributing/CONTRIBUTING_fr.md) | [Deutsch](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/contributing/CONTRIBUTING_de.md) |
+
 Telegram Vacancy Monitor открыт для предложений, исправлений ошибок и улучшений. Спасибо за интерес к проекту.
 
 ## Ошибки и предложения

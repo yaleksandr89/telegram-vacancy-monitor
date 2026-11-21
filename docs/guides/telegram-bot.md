@@ -1,5 +1,11 @@
 # Настройка Telegram-бота
 
+## Выберите язык
+
+| Русский | English | Español | 中文 | Français | Deutsch |
+| --- | --- | --- | --- | --- | --- |
+| **Выбран** | [English](telegram-bot_en.md) | [Español](telegram-bot_es.md) | [中文](telegram-bot_zh.md) | [Français](telegram-bot_fr.md) | [Deutsch](telegram-bot_de.md) |
+
 Для работы нужен бот, созданный через BotFather. В `TELEGRAM_ALLOWED_USER_ID` указывается числовой ID аккаунта Телеграмма, от которого приложение принимает вакансии и которому отправляет результаты.
 
 ## Создайте бота

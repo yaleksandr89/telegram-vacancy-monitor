@@ -1,5 +1,11 @@
 # Формат оценки и уведомлений
 
+## Выберите язык
+
+| Русский | English | Español | 中文 | Français | Deutsch |
+| --- | --- | --- | --- | --- | --- |
+| **Выбран** | [English](analysis-result_en.md) | [Español](analysis-result_es.md) | [中文](analysis-result_zh.md) | [Français](analysis-result_fr.md) | [Deutsch](analysis-result_de.md) |
+
 Приложение получает от модели структурированную оценку, сохраняет её и формирует отдельное текстовое уведомление для Телеграмма. JSON модели и сообщение пользователю имеют разные форматы.
 
 ## Ответ API и JSON модели

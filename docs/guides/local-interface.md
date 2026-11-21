@@ -1,5 +1,11 @@
 # Интерфейс локального приложения
 
+## Выберите язык
+
+| Русский | English | Español | 中文 | Français | Deutsch |
+| --- | --- | --- | --- | --- | --- |
+| **Выбран** | [English](local-interface_en.md) | [Español](local-interface_es.md) | [中文](local-interface_zh.md) | [Français](local-interface_fr.md) | [Deutsch](local-interface_de.md) |
+
 Приложение использует меню Gum на Linux, Windows и macOS. В Windows его запускает PowerShell. Ниже показаны экраны русскоязычного меню.
 
 ## Главное меню

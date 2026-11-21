@@ -1,5 +1,11 @@
 # Пример: Go-разработчик
 
+## Выберите язык
+
+| Русский | English | Español | 中文 | Français | Deutsch |
+| --- | --- | --- | --- | --- | --- |
+| **Выбран** | [English](go-developer_en.md) | [Español](go-developer_es.md) | [中文](go-developer_zh.md) | [Français](go-developer_fr.md) | [Deutsch](go-developer_de.md) |
+
 Все данные в примере вымышлены. Это тексты для настройки и отправки боту, а не заранее подготовленный ответ модели.
 
 [Порядок использования примеров](vacancy-analysis.md#как-использовать-примеры) и [формат оценки](../reference/analysis-result.md).
