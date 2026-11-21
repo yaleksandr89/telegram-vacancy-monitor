@@ -1,5 +1,11 @@
 # Подключение модели ИИ
 
+## Выберите язык
+
+| Русский | English | Español | 中文 | Français | Deutsch |
+| --- | --- | --- | --- | --- | --- |
+| **Выбран** | [English](ai-models_en.md) | [Español](ai-models_es.md) | [中文](ai-models_zh.md) | [Français](ai-models_fr.md) | [Deutsch](ai-models_de.md) |
+
 Приложение работает с локальными и облачными моделями через интерфейс Chat Completions. Адрес сервера и идентификатор модели указываются в `config/bot.ini` по [образцу](../../config/bot.example.ini).
 
 ## Что требуется от API

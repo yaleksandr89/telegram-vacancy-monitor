@@ -1,5 +1,11 @@
 # Профиль кандидата и инструкции
 
+## Выберите язык
+
+| Русский | English | Español | 中文 | Français | Deutsch |
+| --- | --- | --- | --- | --- | --- |
+| **Выбран** | [English](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/config/profile/README_en.md) | [Español](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/config/profile/README_es.md) | [中文](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/config/profile/README_zh.md) | [Français](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/config/profile/README_fr.md) | [Deutsch](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/config/profile/README_de.md) |
+
 Для персональной оценки нужны два приватных Markdown-файла. Они загружаются при запуске обработки из фиксированного каталога `config/profile/local/` относительно корня приложения.
 
 | Файл | Содержание |

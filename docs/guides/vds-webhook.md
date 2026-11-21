@@ -1,5 +1,11 @@
 # Сервер: webhook и cron
 
+## Выберите язык
+
+| Русский | English | Español | 中文 | Français | Deutsch |
+| --- | --- | --- | --- | --- | --- |
+| **Выбран** | [English](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/vds-webhook_en.md) | [Español](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/vds-webhook_es.md) | [中文](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/vds-webhook_zh.md) | [Français](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/vds-webhook_fr.md) | [Deutsch](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/vds-webhook_de.md) |
+
 Сервер принимает вакансии через HTTPS, сохраняет их в SQLite и обрабатывает по расписанию. Текст вакансии можно отправить боту или переслать из другого чата.
 
 [`public/webhook.php`](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/public/webhook.php) сохраняет входящие сообщения. Оценку ИИ и отправку результатов запускает `php bin/bot.php work-once`. Для одного токена выбирайте либо этот режим, либо локальный polling.

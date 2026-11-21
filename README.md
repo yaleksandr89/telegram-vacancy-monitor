@@ -5,6 +5,12 @@
 [![PHP](https://img.shields.io/badge/PHP-%5E8.5-777BB4.svg?style=flat-square&logo=php&logoColor=white)](composer.json)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](LICENSE)
 
+## Выберите язык
+
+| Русский | English | Español | 中文 | Français | Deutsch |
+| --- | --- | --- | --- | --- | --- |
+| **Выбран** | [English](docs/readme/README_en.md) | [Español](docs/readme/README_es.md) | [中文](docs/readme/README_zh.md) | [Français](docs/readme/README_fr.md) | [Deutsch](docs/readme/README_de.md) |
+
 Приложение для персонального отбора вакансий с помощью ИИ. Отправьте или перешлите вакансию боту в Телеграмме. Приложение сохранит её и пришлёт оценку с учётом вашего опыта, предпочтений и ограничений.
 
 Подходит тем, кто собирает предложения из разных источников и хочет быстрее решать, на какие стоит откликаться. Критерии задаются в профиле кандидата и инструкциях оценки. Примеры их оформления приведены в [руководстве](docs/examples/vacancy-analysis.md). Подключить можно локальную или облачную модель ИИ через интерфейс Chat Completions.

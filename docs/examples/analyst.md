@@ -1,5 +1,11 @@
 # Пример: продуктовый аналитик
 
+## Выберите язык
+
+| Русский | English | Español | 中文 | Français | Deutsch |
+| --- | --- | --- | --- | --- | --- |
+| **Выбран** | [English](analyst_en.md) | [Español](analyst_es.md) | [中文](analyst_zh.md) | [Français](analyst_fr.md) | [Deutsch](analyst_de.md) |
+
 Все данные в примере вымышлены. Это тексты для настройки и отправки боту, а не заранее подготовленный ответ модели.
 
 [Порядок использования примеров](vacancy-analysis.md#как-использовать-примеры) и [формат оценки](../reference/analysis-result.md).

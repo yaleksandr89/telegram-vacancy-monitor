@@ -1,5 +1,11 @@
 # Локальное приложение
 
+## Выберите язык
+
+| Русский | English | Español | 中文 | Français | Deutsch |
+| --- | --- | --- | --- | --- | --- |
+| **Выбран** | [English](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/local-gum_en.md) | [Español](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/local-gum_es.md) | [中文](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/local-gum_zh.md) | [Français](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/local-gum_fr.md) | [Deutsch](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/local-gum_de.md) |
+
 Отправьте боту текст вакансии или перешлите объявление из чата либо канала. Приложение сохранит вакансию, оценит её по профилю и пришлёт результат. Пока работает мониторинг, окно приложения должно оставаться открытым.
 
 ## Выберите архив

@@ -1,5 +1,11 @@
 # Как приложение получает и обрабатывает вакансии
 
+## Выберите язык
+
+| Русский | English | Español | 中文 | Français | Deutsch |
+| --- | --- | --- | --- | --- | --- |
+| **Выбран** | [English](message-processing_en.md) | [Español](message-processing_es.md) | [中文](message-processing_zh.md) | [Français](message-processing_fr.md) | [Deutsch](message-processing_de.md) |
+
 Когда вы отправляете или пересылаете вакансию боту, Телеграмм передаёт приложению обновление. Приложение сохраняет текст и создаёт задание на оценку. Результат отправляется в тот же чат после анализа.
 
 ## Что сохраняется
