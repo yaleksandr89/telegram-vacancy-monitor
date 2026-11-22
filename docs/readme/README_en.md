@@ -50,7 +50,7 @@ In local mode, the application receives and analyzes vacancies. On the server, t
 
 ## Ways to run and quick start
 
-**Local application.** Once published, verified archives for Linux x86_64, Windows x64, and macOS ARM64 will appear on the [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases) page. Until the first release is published, no ready-made archive is available there. The [launch guide](../guides/local-gum_en.md) explains how to use the published archive: PHP and its components are bundled, Gum displays the menu, and PowerShell manages startup on Windows.
+**Local application.** Standalone archives for Linux x86_64, Windows x64, and macOS ARM64 are available on the [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases) page. The [launch guide](../guides/local-gum_en.md) explains how to use an archive: PHP and its components are bundled, Gum displays the menu, and PowerShell manages startup on Windows.
 
 **Server.** Running from source requires PHP 8.5 (CLI and PHP-FPM), Composer, the `curl`, `json`, `mbstring`, `PDO`, and `pdo_sqlite` extensions, HTTPS, and cron. Data is stored in SQLite; no separate database server is required. Installation and configuration are covered by the [server guide](../guides/vds-webhook_en.md).
 

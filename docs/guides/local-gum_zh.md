@@ -12,7 +12,7 @@
 
 ## 选择安装包
 
-经过原生环境检查的安装包将在 [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases) 页面发布。首次发布之前，该页面没有现成安装包。以下文件名是将来发布的版本名称。
+适用于 Linux x86_64、Windows x64 和 macOS ARM64 的 standalone 安装包已在 [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases) 页面提供下载。请从下表选择与你的平台对应的安装包。
 
 | 平台 | 文件名 | 电脑要求 |
 | --- | --- | --- |
