@@ -12,7 +12,7 @@ Envoyez le texte d’une offre au bot ou transférez une annonce depuis une disc
 
 ## Choisir l’archive
 
-Les archives vérifiées seront publiées sur la page [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases) après les contrôles natifs. Avant la première version publiée, aucune archive prête à l’emploi n’y est disponible. Les noms ci-dessous désignent les futures compilations publiées.
+Les archives standalone pour Linux x86_64, Windows x64 et macOS ARM64 sont disponibles sur la page [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases). Choisissez celle de votre plateforme dans le tableau ci-dessous.
 
 | Plateforme | Nom de l’archive | Configuration nécessaire |
 | --- | --- | --- |

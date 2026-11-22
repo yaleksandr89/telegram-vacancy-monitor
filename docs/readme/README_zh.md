@@ -50,7 +50,7 @@ flowchart LR
 
 ## 运行方式与快速入门
 
-**本地应用。** 发布后，适用于 Linux x86_64、Windows x64 和 macOS ARM64 的已验证归档文件会出现在 [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases) 页面。在首次 Release 发布之前，该页面没有可下载的成品归档。[启动指南](../guides/local-gum_zh.md)说明如何使用发布后的归档：其中已包含 PHP 及相关组件，Gum 负责显示菜单，Windows 上通过 PowerShell 管理启动。
+**本地应用。** 适用于 Linux x86_64、Windows x64 和 macOS ARM64 的 standalone 安装包已在 [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases) 页面提供下载。[启动指南](../guides/local-gum_zh.md)介绍如何使用安装包：其中已包含 PHP 及相关组件，Gum 负责显示菜单，Windows 上通过 PowerShell 管理启动。
 
 **服务器。** 从源码运行需要 PHP 8.5（CLI 和 PHP-FPM）、Composer、`curl`、`json`、`mbstring`、`PDO`、`pdo_sqlite` 扩展、HTTPS 以及 cron。数据保存在 SQLite 中，无需独立数据库服务器。安装和配置步骤见[服务器指南](../guides/vds-webhook_zh.md)。
 

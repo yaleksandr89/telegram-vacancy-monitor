@@ -12,7 +12,7 @@ Sende dem Bot den Text einer Stelle oder leite eine Ausschreibung aus einem ande
 
 ## Archiv auswählen
 
-Geprüfte Archive werden nach nativen Tests auf der Seite [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases) veröffentlicht. Vor dem ersten Release sind dort keine fertigen Archive verfügbar. Die folgenden Namen bezeichnen zukünftige veröffentlichte Builds.
+Die Standalone-Archive für Linux x86_64, Windows x64 und macOS ARM64 stehen auf der Seite [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases) bereit. Wähle das Archiv für dein Betriebssystem aus der folgenden Tabelle.
 
 | Plattform | Archivname | Voraussetzungen am Computer |
 | --- | --- | --- |

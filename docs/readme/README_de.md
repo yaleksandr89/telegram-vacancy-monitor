@@ -50,7 +50,7 @@ Im lokalen Betrieb empfängt und analysiert die Anwendung Stellenangebote. Auf d
 
 ## Betriebsarten und Schnellstart
 
-**Lokale Anwendung.** Nach der Veröffentlichung werden geprüfte Archive für Linux x86_64, Windows x64 und macOS ARM64 auf der Seite [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases) bereitstehen. Bis zur Veröffentlichung des ersten Releases gibt es dort kein fertiges Archiv zum Herunterladen. Die [Startanleitung](../guides/local-gum_de.md) erklärt die Verwendung eines veröffentlichten Archivs: PHP und seine Komponenten sind enthalten, Gum zeigt das Menü an und unter Windows steuert PowerShell den Start.
+**Lokale Anwendung.** Die Standalone-Archive für Linux x86_64, Windows x64 und macOS ARM64 stehen auf der Seite [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases) bereit. Die [Startanleitung](../guides/local-gum_de.md) erklärt, wie du das Archiv verwendest: PHP und seine Komponenten sind enthalten, Gum zeigt das Menü an und unter Windows steuert PowerShell den Start.
 
 **Server.** Für die Ausführung aus dem Quellcode werden PHP 8.5 (CLI und PHP-FPM), Composer, die Erweiterungen `curl`, `json`, `mbstring`, `PDO` und `pdo_sqlite`, HTTPS und cron benötigt. Die Daten liegen in SQLite; ein separater Datenbankserver ist nicht erforderlich. Einrichtung und Konfiguration beschreibt die [Serveranleitung](../guides/vds-webhook_de.md).
 

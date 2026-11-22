@@ -12,7 +12,7 @@ Send a vacancy as text or forward an advertisement from another chat or channel.
 
 ## Choose an archive
 
-Verified archives are published on the [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases) page after native checks. No ready-made archives are available there before the first release. The names below refer to future published builds.
+Standalone archives for Linux x86_64, Windows x64, and macOS ARM64 are available on the [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases) page. Choose the archive for your platform from the table below.
 
 | Platform | Archive name | Required on the computer |
 | --- | --- | --- |

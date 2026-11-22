@@ -50,7 +50,7 @@ flowchart LR
 
 ## Способы запуска и быстрый старт
 
-**Локальное приложение.** После публикации проверенные архивы для Linux x86_64, Windows x64 и macOS ARM64 появятся на странице [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases). Пока релиз не опубликован, скачивать готовый архив нечего. Для опубликованного архива есть [инструкция по запуску](docs/guides/local-gum.md): PHP и компоненты входят в комплект, меню отображает Gum, в Windows запуском управляет PowerShell.
+**Локальное приложение.** Готовые архивы для Linux x86_64, Windows x64 и macOS ARM64 доступны на странице [Releases](https://github.com/yaleksandr89/telegram-vacancy-monitor/releases). [Инструкция по запуску](docs/guides/local-gum.md) описывает использование архива: PHP и компоненты входят в комплект, меню отображает Gum, в Windows запуском управляет PowerShell.
 
 **Сервер.** Для запуска из исходников нужны PHP 8.5 (CLI и PHP-FPM), Composer, расширения `curl`, `json`, `mbstring`, `PDO`, `pdo_sqlite`, HTTPS и cron. Данные хранятся в SQLite, отдельный сервер базы данных не требуется. Установка и настройка описаны в [серверном руководстве](docs/guides/vds-webhook.md).
 
