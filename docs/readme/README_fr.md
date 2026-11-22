@@ -5,6 +5,8 @@
 [![PHP](https://img.shields.io/badge/PHP-%5E8.5-777BB4.svg?style=flat-square&logo=php&logoColor=white)](../../composer.json)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](../../LICENSE)
 
+![Telegram Vacancy Monitor — analyse personnalisée des offres d’emploi par IA via Telegram](../images/telegram-vacancy-monitor-readme-cover.png)
+
 ## Choisir une langue
 
 | Русский | English | Español | 中文 | Français | Deutsch |
