@@ -1,8 +1,7 @@
 {
     "name": "yaleksandr89/telegram-vacancy-monitor",
-    "description": "Консольное PHP-приложение для мониторинга Telegram-каналов с вакансиями.",
-    "type": "project",
-    "license": "MIT",
+    "description": "PHP application for AI-assisted screening of job vacancies submitted through a Telegram bot.",
+    "homepage": "https://github.com/yaleksandr89/telegram-vacancy-monitor",
     "keywords": [
         "telegram",
         "vacancies",
@@ -12,13 +11,29 @@
     "authors": [
         {
             "name": "Александр Юрченко",
+            "email": "y.aleksandr89@yandex.ru",
+            "homepage": "https://github.com/yaleksandr89",
             "role": "Developer"
         }
     ],
     "support": {
         "issues": "https://github.com/yaleksandr89/telegram-vacancy-monitor/issues",
-        "source": "https://github.com/yaleksandr89/telegram-vacancy-monitor"
+        "source": "https://github.com/yaleksandr89/telegram-vacancy-monitor",
+        "forum": "https://github.com/yaleksandr89/telegram-vacancy-monitor/discussions",
+        "security": "https://github.com/yaleksandr89/telegram-vacancy-monitor/security/policy"
     },
+    "funding": [
+        {
+            "type": "other",
+            "url": "https://boosty.to/backendbezpafosa"
+        },
+        {
+            "type": "other",
+            "url": "https://sponsr.ru/backendbezpafosa/"
+        }
+    ],
+    "type": "project",
+    "license": "MIT",
     "require": {
         "php": "^8.5",
         "ext-curl": "*",
