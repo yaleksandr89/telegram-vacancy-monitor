@@ -412,8 +412,8 @@ def source_runtime(work, runtime, cache, offline, target):
 
 
 def validate_composer(package):
-    requirements = json.loads((package / 'composer.json').read_text())['require']
-    lock = json.loads((package / 'composer.lock').read_text())
+    requirements = json.loads((package / 'composer.json').read_text(encoding='utf-8'))['require']
+    lock = json.loads((package / 'composer.lock').read_text(encoding='utf-8'))
     if (not isinstance(requirements, dict) or 'php' not in requirements
             or any((key != 'php' and not re.fullmatch(r'ext-[a-z0-9_]+', key))
                    or not isinstance(value, str) or not value for key, value in requirements.items())
