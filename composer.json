@@ -65,13 +65,23 @@
         ],
         "lint": "@php tests/Lint.php",
         "check": [
-            "@composer validate --no-check-publish",
+            "@composer validate --strict --no-check-publish",
+            "@composer audit --locked",
             "@lint",
+            "@cs:check",
+            "@analyse",
             "@test"
-        ]
+        ],
+        "cs:check": "php-cs-fixer fix --dry-run --diff",
+        "cs:fix": "php-cs-fixer fix",
+        "analyse": "phpstan analyse --configuration=phpstan.neon.dist --no-progress"
     },
     "config": {
         "sort-packages": true,
         "optimize-autoloader": true
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "~3.95.0",
+        "phpstan/phpstan": "~2.3.0"
     }
 }

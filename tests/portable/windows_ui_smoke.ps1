@@ -7,7 +7,11 @@ $Utf8 = New-Object Text.UTF8Encoding($false)
 function Verify([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
+$SavedPortable = $env:VM_PORTABLE
+$SavedCase = $env:FIXTURE_CASE
+$SavedFinished = $env:FINISHED
 try {
+    $env:VM_PORTABLE = $null
     [IO.Directory]::CreateDirectory((Join-Path $Root 'src/ui/windows')) | Out-Null
     [IO.Directory]::CreateDirectory((Join-Path $Root 'bin')) | Out-Null
     [IO.Directory]::CreateDirectory((Join-Path $Root 'config')) | Out-Null
@@ -17,6 +21,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $Root 'config/bot.ini'), 'TELEGRAM_BOT_TOKEN="123:synthetic-token"', $Utf8)
     $Fixture = @'
 <?php
+file_put_contents(__DIR__ . '/started', '1');
 $case = getenv('FIXTURE_CASE') ?: 'unknown';
 if (($argv[1] ?? '') === 'identify') {
     echo '{"status":"error","ids":[]}';
@@ -67,6 +72,34 @@ exit($case === 'clean' ? 0 : 7);
         Verify ($Keys -contains $Action) 'Unexpected navigation'
         return $Action
     }
+    AppPhp @($Inspector, 'runtime') | Out-Null
+    Verify ($script:AppStatus -eq 0) 'Host PHP failed the source runtime check.'
+    Write-Host 'PASS: host PHP accepted as source runtime.'
+    $HostGuard = Guard
+    if ($HostGuard -ne '') {
+        Verify ($HostGuard -ceq 'runtime_invalid') 'Unexpected host guard failure.'
+        $script:Screens = New-Object 'Collections.Generic.List[string]'
+        $script:Phases = New-Object 'Collections.Generic.List[string]'
+        $script:Queue = New-Object 'Collections.Generic.Queue[string]'
+        $script:Queue.Enqueue('main')
+        RunFlow | Out-Null
+        Verify ($script:Screens.Count -eq 1 -and $script:Screens[0] -ceq (Text 'runtime_invalid')) 'Expected only runtime_invalid.'
+        Verify ($script:Queue.Count -eq 0 -and -not (Test-Path -LiteralPath (Join-Path $Root 'bin/started'))) 'Rejected host ran child or failed navigation.'
+        Write-Host 'PASS: bundle guard rejected host before child start.'
+    }
+    $Override = [Environment]::GetEnvironmentVariable('TVM_TEST_BUNDLE_PHP')
+    if ($null -ne $Override) {
+        if ($Override -notmatch '^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+\\[^\\/]+\\)' -or
+            [IO.Path]::GetFileName($Override) -ine 'php.exe' -or
+            -not [IO.File]::Exists($Override)) {
+            throw 'TVM_TEST_BUNDLE_PHP must be an absolute path to a trusted Windows php.exe.'
+        }
+        $Php = $Override
+    }
+    if ((Guard) -cne '') {
+        throw 'Set TVM_TEST_BUNDLE_PHP to a working bundle-compatible php.exe with the required extensions.'
+    }
+    Write-Host 'PASS: selected PHP accepted by the bundle guard.'
     foreach ($Case in @('config', 'lock', '409', 'tls', 'network', 'auth', 'storage', 'unknown', 'clean')) {
         $env:FIXTURE_CASE = $Case
         $script:Screens = New-Object 'Collections.Generic.List[string]'
@@ -104,7 +137,8 @@ exit($case === 'clean' ? 0 : 7);
     Write-Host 'PASS: native PowerShell function scenarios, bounded diagnostics, secrecy, Again/Main, identify, RU/EN and live stdout.'
     Write-Host 'NOT VERIFIED: real Windows console Gum navigation, Ctrl+C and clean Windows CRT.'
 } finally {
-    $env:FIXTURE_CASE = $null
-    $env:FINISHED = $null
+    $env:VM_PORTABLE = $SavedPortable
+    $env:FIXTURE_CASE = $SavedCase
+    $env:FINISHED = $SavedFinished
     if (Test-Path -LiteralPath $Directory) { Remove-Item -LiteralPath $Directory -Recurse -Force }
 }

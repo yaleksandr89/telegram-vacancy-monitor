@@ -55,7 +55,7 @@ final readonly class WebhookReceiver
                 return 400;
             }
             $update = Update::fromArray($payload);
-        } catch (JsonException | UnexpectedResponseException) {
+        } catch (JsonException|UnexpectedResponseException) {
             return 400;
         } catch (Throwable) {
             return 503;

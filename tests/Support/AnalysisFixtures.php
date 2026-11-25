@@ -32,6 +32,33 @@ function testPrompt(string $text = 'Искусственное задание д
     return new EvaluationPromptBuilder(new EvaluationInstructions($text));
 }
 
+function testQuery(PDO $pdo, string $sql): PDOStatement
+{
+    $statement = $pdo->query($sql);
+    if ($statement === false) {
+        throw new RuntimeException('Не выполнен тестовый запрос SQLite.');
+    }
+    return $statement;
+}
+
+/** @return array<string, mixed> */
+function testRow(PDO $pdo, string $sql): array
+{
+    $row = testQuery($pdo, $sql)->fetch(PDO::FETCH_ASSOC);
+    if ($row === false) {
+        throw new RuntimeException('Отсутствует ожидаемая строка SQLite.');
+    }
+    return $row;
+}
+
+function testString(mixed $value): string
+{
+    if (!is_string($value)) {
+        throw new RuntimeException('Ожидалась строка.');
+    }
+    return $value;
+}
+
 function verify(bool $condition, string $message): void
 {
     if (!$condition) {
@@ -39,6 +66,7 @@ function verify(bool $condition, string $message): void
     }
 }
 
+/** @return array<string, string|list<string>> */
 function syntheticResult(string $verdict = 'apply'): array
 {
     return [
@@ -52,6 +80,7 @@ function syntheticResult(string $verdict = 'apply'): array
 /**
  * RU: Даёт подробный безопасный ответ, превышающий прежние ограничения полей.
  * EN: Provides a verbose safe response exceeding the former field limits.
+ * @return array<string, string|list<string>>
  */
 function verboseResult(): array
 {
@@ -81,7 +110,7 @@ final class FakeAi implements AiHttpTransport
 
     public function postJson(string $url, string $json, ?string $apiKey): AiHttpResponse
     {
-        ($this->beforeCall ?? static fn () => null)();
+        ($this->beforeCall ?? static fn() => null)();
         $this->calls[] = ['url' => $url, 'json' => $json];
         $response = array_shift($this->responses);
         if ($response instanceof Throwable) {
@@ -115,10 +144,10 @@ final class FakeTelegram implements HttpTransport
             return new HttpResponse(200, '{"ok":true,"result":[]}');
         }
         verify(str_ends_with($url, '/sendMessage'), 'Неожиданный метод в тестовом транспорте.');
-        ($this->beforeSend ?? static fn () => null)();
+        ($this->beforeSend ?? static fn() => null)();
         verify(!isset($request['parse_mode']), 'Уведомление должно быть обычным текстом.');
         verify(mb_check_encoding($request['text'], 'UTF-8') && $request['text'] !== ''
-            && strlen(mb_convert_encoding($request['text'], 'UTF-16LE', 'UTF-8')) <= 8192, 'Исходящее сообщение нарушает бюджет Unicode.');
+            && strlen(testString(mb_convert_encoding($request['text'], 'UTF-16LE', 'UTF-8'))) <= 8192, 'Исходящее сообщение нарушает бюджет Unicode.');
         verify(($request['link_preview_options']['is_disabled'] ?? false) === true, 'Предпросмотр ссылок не отключён.');
         $this->texts[] = $request['text'];
         if ($this->fail) {
@@ -146,9 +175,13 @@ function fixture(?ConservativePrefilter $prefilter = null, int $maxAttempts = 3)
     $profile = new CandidateProfile('Искусственный профиль: опыт API и SQL; условия оценивать по тексту вакансии.');
     $jobs = new SqliteAnalysisRepository($pdo);
     $pipeline = new VacancyAnalysisPipeline(
-        $jobs, $profile, $prefilter ?? new ConservativePrefilter(),
+        $jobs,
+        $profile,
+        $prefilter ?? new ConservativePrefilter(),
         new OpenAiCompatibleEvaluator($ai, new AnalysisResultValidator(), testPrompt(), 'http://127.0.0.1:1234/v1', 'synthetic-model'),
-        new VacancyResultFormatter(), $bot, $maxAttempts,
+        new VacancyResultFormatter(),
+        $bot,
+        $maxAttempts,
     );
     $inbox = new SqliteInboxRepository($pdo);
 

@@ -78,8 +78,8 @@ try {
     $bot->getUpdates(new GetUpdatesRequest(41, 0));
     throw new RuntimeException('Некорректный JSON не обнаружен.');
 } catch (UnexpectedResponseException) {
-    // EN: Malformed responses are distinct from API rejections.
     // RU: Некорректные ответы отличаются от отказов API.
+    // EN: Malformed responses are distinct from API rejections.
 }
 
 foreach ([

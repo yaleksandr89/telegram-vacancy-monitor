@@ -66,14 +66,21 @@ final readonly class VacancyResultFormatter
             $fields[$label . ': '] = implode('; ', $items);
         }
         $header = [$lines[0], $lines[1], '(сокращено для Telegram)'];
+        return $this->compact($header, $fields, $footer);
+    }
+
+    /**
+     * @param list<string> $header
+     * @param array<string, string> $fields
+     * @param list<string> $footer
+     */
+    private function compact(array $header, array $fields, array $footer): string
+    {
         $fixed = implode("\n", [...$header, ...array_keys($fields), ...$footer]);
         $remaining = self::MESSAGE_LIMIT - $this->telegramLength($fixed);
         $lengths = array_map($this->telegramLength(...), $fields);
-        $budgets = [];
-        foreach ($lengths as $label => $length) {
-            $budgets[$label] = min(120, $length);
-            $remaining -= $budgets[$label];
-        }
+        $budgets = array_map(static fn(int $length): int => min(120, $length), $lengths);
+        $remaining -= array_sum($budgets);
         // RU: Каждому разделу оставляем место; остаток отдаём прежде всего обоснованию и условиям.
         // RU: Число проходов ограничено бюджетом сообщения, а не длиной входного текста.
         // EN: Reserve room for every section; favor rationale and conditions with the remaining space.
@@ -127,6 +134,7 @@ final readonly class VacancyResultFormatter
     /**
      * RU: Помечает готовую безопасную ссылку в зависимости от совпадения её ID с данными пересылки.
      * EN: Labels an existing safe link according to whether its IDs match forwarded metadata.
+     * @param array<string, mixed> $job
      */
     public function sourceDescription(array $job): ?string
     {
@@ -171,6 +179,7 @@ final readonly class VacancyResultFormatter
     /**
      * RU: Возвращает только готовую ссылку, совпавшую с подтверждёнными ID; не придумывает адрес источника.
      * EN: Returns only an existing link matching confirmed origin IDs; never invents a source URL.
+     * @param array<string, mixed> $job
      */
     public function verifiedSource(array $job): ?string
     {

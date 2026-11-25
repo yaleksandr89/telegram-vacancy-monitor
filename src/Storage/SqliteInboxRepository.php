@@ -24,10 +24,11 @@ final readonly class SqliteInboxRepository
     /**
      * RU: Возвращает ID первого обновления, обработка которого ещё не сохранена.
      * EN: Returns the first update ID not yet durably processed.
+     * @phpstan-impure
      */
     public function nextOffset(): int
     {
-        $value = $this->pdo->query("SELECT next_offset FROM cursor WHERE name = 'main'")->fetchColumn();
+        $value = ($this->pdo->query("SELECT next_offset FROM cursor WHERE name = 'main'") ?: throw new \RuntimeException('Не выполнен запрос SQLite.'))->fetchColumn();
 
         return $value === false ? 0 : (int) $value;
     }
@@ -38,8 +39,10 @@ final readonly class SqliteInboxRepository
      */
     public function pollingOffset(int $now): int
     {
-        $cursor = $this->pdo->query("SELECT next_offset, last_handled_at FROM cursor WHERE name = 'main'")
-            ->fetch(PDO::FETCH_ASSOC);
+        $cursor = ($this->pdo->query("SELECT next_offset, last_handled_at FROM cursor WHERE name = 'main'") ?: throw new \RuntimeException('Не выполнен запрос SQLite.'))->fetch(PDO::FETCH_ASSOC);
+        if ($cursor === false) {
+            return 0;
+        }
         $lastHandledAt = $cursor['last_handled_at'] ?? null;
         if (!is_int($lastHandledAt) || $lastHandledAt <= 0 || $lastHandledAt > $now || $now - $lastHandledAt > self::POLLING_CURSOR_MAX_AGE) {
             return 0;

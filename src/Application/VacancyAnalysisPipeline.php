@@ -101,13 +101,16 @@ final readonly class VacancyAnalysisPipeline
                 $verifiedOriginIds = $this->formatter->verifiedSource($job) !== null;
                 $resultJson = $result?->toJson($verifiedOriginIds);
                 $notification = $this->formatter->format(
-                    $result, (int) $job['recipient_message_id'], $reason, $this->formatter->sourceDescription($job),
+                    $result,
+                    (int) $job['recipient_message_id'],
+                    $reason,
+                    $this->formatter->sourceDescription($job),
                 );
             } catch (AiException $exception) {
                 $this->failure(ProcessingStage::Analysis, $job, $exception->category, $exception->retryable, $now + (int) ((hrtime(true) - $started) / 1e9));
                 return true;
             }
-            $this->jobs->complete($id, $result?->verdict ?? Verdict::Skip, $resultJson, $notification);
+            $this->jobs->complete($id, $result->verdict ?? Verdict::Skip, $resultJson, $notification);
             return true;
         }
 
@@ -124,7 +127,7 @@ final readonly class VacancyAnalysisPipeline
                 $chatId,
                 'Вакансия передана на анализ ИИ. Результат придёт сюда, как только анализ завершится.',
             ));
-        } catch (BotApiException | BotTransportException | UnexpectedResponseException) {
+        } catch (BotApiException|BotTransportException|UnexpectedResponseException) {
             error_log('Не удалось отправить уведомление о начале анализа ИИ.');
         }
     }
@@ -155,7 +158,7 @@ final readonly class VacancyAnalysisPipeline
                     $now + (int) ((hrtime(true) - $started) / 1e9),
                     $code === 429 ? $exception->retryAfter : null,
                 );
-            } catch (BotTransportException | UnexpectedResponseException) {
+            } catch (BotTransportException|UnexpectedResponseException) {
                 $this->failure(ProcessingStage::Delivery, $job, 'telegram_transport_or_response', true, $now + (int) ((hrtime(true) - $started) / 1e9));
             }
             if ($sent) {
@@ -167,6 +170,7 @@ final readonly class VacancyAnalysisPipeline
         return false;
     }
 
+    /** @param array<string, mixed> $job */
     private function failure(
         ProcessingStage $stage,
         array $job,
@@ -180,7 +184,10 @@ final readonly class VacancyAnalysisPipeline
         $delay = max(min(300, 15 * (2 ** min($attempts, 4))), $retryAfter ?? 0);
         $nextAt = $now > PHP_INT_MAX - $delay ? PHP_INT_MAX : $now + $delay;
         $this->jobs->fail(
-            $stage, (int) $job['message_id'], $category, $terminal,
+            $stage,
+            (int) $job['message_id'],
+            $category,
+            $terminal,
             $nextAt,
             $stage === ProcessingStage::Analysis && $terminal
                 ? $this->formatter->format(null, (int) $job['recipient_message_id'], source: $this->formatter->sourceDescription($job)) : null,

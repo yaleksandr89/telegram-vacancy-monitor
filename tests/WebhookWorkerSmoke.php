@@ -24,9 +24,10 @@ function webhookBody(int $update, int $message, int $sender = 123, ?int $origin 
     return json_encode(['update_id' => $update, 'message' => $payload], JSON_THROW_ON_ERROR);
 }
 
+/** @phpstan-impure */
 function receive(WebhookReceiver $receiver, string $body): int
 {
-    return $receiver->receive('POST', 'application/json; charset=utf-8', 'synthetic-secret', static fn (): string => $body);
+    return $receiver->receive('POST', 'application/json; charset=utf-8', 'synthetic-secret', static fn(): string => $body);
 }
 
 [$pdo, $ai, $telegram, $pipeline, $runner] = fixture();
@@ -50,7 +51,7 @@ verify(receive($receiver, str_repeat(' ', WebhookReceiver::MAX_BODY_BYTES + 1)) 
 verify($opens === 0 && $telegram->texts === [] && $ai->calls === [], 'Отклонённый запрос открыл БД или вызвал API.');
 foreach (['', 'has spaces', str_repeat('x', 257), 'секрет'] as $invalidSecret) {
     try {
-        new WebhookReceiver($invalidSecret, static fn (): IncomingUpdateProcessor => throw new LogicException('Не открывать БД.'));
+        new WebhookReceiver($invalidSecret, static fn(): IncomingUpdateProcessor => throw new LogicException('Не открывать БД.'));
         throw new LogicException('Принят неверный формат секрета.');
     } catch (ConfigurationException) {
     }
@@ -58,28 +59,28 @@ foreach (['', 'has spaces', str_repeat('x', 257), 'секрет'] as $invalidSec
 
 $telegram->beforeSend = static function () use ($pdo): void {
     verify(!$pdo->inTransaction(), 'Подтверждение отправлено внутри транзакции.');
-    verify((int) $pdo->query('SELECT COUNT(*) FROM received_updates')->fetchColumn() >= 1, 'Подтверждение до фиксации update.');
-    verify((int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn() === (int) $pdo->query('SELECT COUNT(*) FROM analysis_jobs')->fetchColumn(), 'Подтверждение до создания задания.');
+    verify((int) testQuery($pdo, 'SELECT COUNT(*) FROM received_updates')->fetchColumn() >= 1, 'Подтверждение до фиксации update.');
+    verify((int) testQuery($pdo, 'SELECT COUNT(*) FROM messages')->fetchColumn() === (int) testQuery($pdo, 'SELECT COUNT(*) FROM analysis_jobs')->fetchColumn(), 'Подтверждение до создания задания.');
 };
 verify(receive($receiver, webhookBody(101, 11, origin: 51)) === 204, 'Не принят корректный update.');
 verify(receive($receiver, webhookBody(101, 99, origin: 99)) === 204 && count($telegram->texts) === 1, 'Повтор update вызвал приём или ответ.');
 verify(receive($receiver, webhookBody(100, 10, origin: 50)) === 204, 'Потерян неупорядоченный update.');
-verify((int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn() === 2 && count($telegram->texts) === 2, 'Update 101 заставил пропустить 100.');
+verify((int) testQuery($pdo, 'SELECT COUNT(*) FROM messages')->fetchColumn() === 2 && count($telegram->texts) === 2, 'Update 101 заставил пропустить 100.');
 verify(new SqliteInboxRepository($pdo)->nextOffset() === 0, 'Webhook изменил polling-курсор.');
 verify(receive($receiver, webhookBody(102, 12, origin: 50)) === 204, 'Не принят дубль origin.');
 verify(receive($receiver, webhookBody(103, 10)) === 204, 'Не принят дубль recipient.');
-verify((int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn() === 2 && end($telegram->texts) === 'Эта публикация уже сохранена.', 'Утрачена исходная дедупликация.');
+verify((int) testQuery($pdo, 'SELECT COUNT(*) FROM messages')->fetchColumn() === 2 && testString(end($telegram->texts)) === 'Эта публикация уже сохранена.', 'Утрачена исходная дедупликация.');
 foreach ([webhookBody(104, 13, sender: 999), webhookBody(105, 14, chatType: 'group')] as $unauthorized) {
     $before = count($telegram->texts);
     verify(receive($receiver, $unauthorized) === 204 && count($telegram->texts) === $before, 'Постороннему отправлен ответ.');
 }
-verify((int) $pdo->query('SELECT COUNT(*) FROM analysis_jobs')->fetchColumn() === 2, 'Постороннее сообщение создало задание.');
+verify((int) testQuery($pdo, 'SELECT COUNT(*) FROM analysis_jobs')->fetchColumn() === 2, 'Постороннее сообщение создало задание.');
 verify(receive($receiver, webhookBody(106, 15)) === 204 && receive($receiver, webhookBody(107, 16)) === 204, 'Неподтверждённые источники объединены.');
-verify((int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn() === 4 && $ai->calls === [] && $telegram->polls === [], 'Webhook вызвал ИИ/polling или потерял независимые сообщения.');
+verify((int) testQuery($pdo, 'SELECT COUNT(*) FROM messages')->fetchColumn() === 4 && $ai->calls === [] && $telegram->polls === [], 'Webhook вызвал ИИ/polling или потерял независимые сообщения.');
 $telegram->beforeSend = null;
 $telegram->fail = true;
 verify(receive($receiver, webhookBody(108, 17)) === 204, 'Сбой подтверждения отменил приём.');
-verify((int) $pdo->query('SELECT COUNT(*) FROM analysis_jobs')->fetchColumn() === 5, 'Сбой подтверждения потерял задание.');
+verify((int) testQuery($pdo, 'SELECT COUNT(*) FROM analysis_jobs')->fetchColumn() === 5, 'Сбой подтверждения потерял задание.');
 $telegram->fail = false;
 
 // RU: Ошибка очереди откатывает receipt, сообщение и job; повтор затем может сохраниться.
@@ -87,8 +88,8 @@ $telegram->fail = false;
 $pdo->exec("CREATE TRIGGER fail_webhook_job BEFORE INSERT ON analysis_jobs BEGIN SELECT RAISE(ABORT, 'Искусственный отказ'); END");
 $beforeReplies = count($telegram->texts);
 verify(receive($receiver, webhookBody(109, 18)) === 503, 'Ошибка БД получила 2xx.');
-verify((int) $pdo->query('SELECT COUNT(*) FROM received_updates WHERE update_id = 109')->fetchColumn() === 0
-    && (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn() === 5 && count($telegram->texts) === $beforeReplies, 'Ошибка БД не откатила приём или вызвала подтверждение.');
+verify((int) testQuery($pdo, 'SELECT COUNT(*) FROM received_updates WHERE update_id = 109')->fetchColumn() === 0
+    && (int) testQuery($pdo, 'SELECT COUNT(*) FROM messages')->fetchColumn() === 5 && count($telegram->texts) === $beforeReplies, 'Ошибка БД не откатила приём или вызвала подтверждение.');
 $pdo->exec('DROP TRIGGER fail_webhook_job');
 verify(receive($receiver, webhookBody(109, 18)) === 204, 'Повтор после ошибки не сохранился.');
 
@@ -99,15 +100,15 @@ $pdo->exec('CREATE TABLE commit_guard (id INTEGER REFERENCES messages(id) DEFERR
 $pdo->exec('CREATE TRIGGER fail_commit AFTER INSERT ON analysis_jobs BEGIN INSERT INTO commit_guard VALUES (-1); END');
 $beforeReplies = count($telegram->texts);
 verify(receive($receiver, webhookBody(110, 19)) === 503 && count($telegram->texts) === $beforeReplies, 'Сбой COMMIT получил 2xx или подтверждение.');
-verify(!$pdo->inTransaction() && (int) $pdo->query('SELECT COUNT(*) FROM received_updates WHERE update_id = 110')->fetchColumn() === 0
-    && (int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn() === 6, 'Сбой COMMIT не откатил весь приём.');
+verify(!$pdo->inTransaction() && (int) testQuery($pdo, 'SELECT COUNT(*) FROM received_updates WHERE update_id = 110')->fetchColumn() === 0
+    && (int) testQuery($pdo, 'SELECT COUNT(*) FROM messages')->fetchColumn() === 6, 'Сбой COMMIT не откатил весь приём.');
 $pdo->exec('DROP TRIGGER fail_commit');
 verify(receive($receiver, webhookBody(110, 19)) === 204, 'Повтор после сбоя COMMIT не принят.');
-$unavailable = new WebhookReceiver('synthetic-secret', static fn (): IncomingUpdateProcessor => throw new PDOException('Искусственный отказ открытия БД.'));
+$unavailable = new WebhookReceiver('synthetic-secret', static fn(): IncomingUpdateProcessor => throw new PDOException('Искусственный отказ открытия БД.'));
 verify(receive($unavailable, webhookBody(111, 20)) === 503, 'Ошибка открытия БД получила 2xx.');
 $pdo->exec('CREATE TRIGGER ignore_receipt BEFORE INSERT ON received_updates BEGIN SELECT RAISE(IGNORE); END');
 verify(receive($receiver, webhookBody(111, 20)) === 503, 'Пропущенный receipt принят за повтор update.');
-verify((int) $pdo->query('SELECT COUNT(*) FROM messages')->fetchColumn() === 7, 'Пропущенный receipt сохранил сообщение.');
+verify((int) testQuery($pdo, 'SELECT COUNT(*) FROM messages')->fetchColumn() === 7, 'Пропущенный receipt сохранил сообщение.');
 $pdo->exec('DROP TRIGGER ignore_receipt');
 
 $base = json_decode(webhookBody(112, 20), true, flags: JSON_THROW_ON_ERROR)['message'];
@@ -127,11 +128,11 @@ foreach ($cases as $i => $content) {
     $body = json_encode(['update_id' => 112 + $i, 'message' => $message], JSON_THROW_ON_ERROR);
     verify(receive($receiver, $body) === 204 && receive($receiver, $body) === 204, 'Webhook не принял команду, вакансию или повтор.');
 }
-verify($pdo->query('SELECT body FROM messages WHERE recipient_message_id >= 20 ORDER BY recipient_message_id')->fetchAll(PDO::FETCH_COLUMN)
+verify(testQuery($pdo, 'SELECT body FROM messages WHERE recipient_message_id >= 20 ORDER BY recipient_message_id')->fetchAll(PDO::FETCH_COLUMN)
     === ['/start payload', '/start', '/start'], 'Webhook перепутал /start и вакансии.');
-verify((int) $pdo->query('SELECT COUNT(*) FROM analysis_jobs')->fetchColumn() === 10
-    && (int) $pdo->query('SELECT COUNT(*) FROM received_updates WHERE update_id BETWEEN 112 AND 115')->fetchColumn() === 4
-    && (int) $pdo->query('SELECT COUNT(*) FROM cursor')->fetchColumn() === 0, 'Команда или вакансия нарушила задания, receipts или polling-курсор.');
+verify((int) testQuery($pdo, 'SELECT COUNT(*) FROM analysis_jobs')->fetchColumn() === 10
+    && (int) testQuery($pdo, 'SELECT COUNT(*) FROM received_updates WHERE update_id BETWEEN 112 AND 115')->fetchColumn() === 4
+    && (int) testQuery($pdo, 'SELECT COUNT(*) FROM cursor')->fetchColumn() === 0, 'Команда или вакансия нарушила задания, receipts или polling-курсор.');
 verify(array_slice($telegram->texts, $repliesBefore) === [
     'Перешли сюда вакансию. Я сохраню текст и отвечу подтверждением.',
     'Вакансия сохранена.', 'Вакансия сохранена.', 'Вакансия сохранена.',
@@ -140,38 +141,44 @@ verify(array_slice($telegram->texts, $repliesBefore) === [
 // RU: Два файловых дескриптора имитируют конкурентные cron tick без runtime-файлов приложения.
 // EN: Two file descriptors simulate concurrent cron ticks without application runtime files.
 [$pdo, $ai, $telegram, $pipeline, $runner] = fixture();
-$receiver = new WebhookReceiver('synthetic-secret', static fn (): IncomingUpdateProcessor => new IncomingUpdateProcessor(
-    new BotApiClient('123:synthetic', $telegram), new SqliteInboxRepository($pdo), 123,
+$receiver = new WebhookReceiver('synthetic-secret', static fn(): IncomingUpdateProcessor => new IncomingUpdateProcessor(
+    new BotApiClient('123:synthetic', $telegram),
+    new SqliteInboxRepository($pdo),
+    123,
 ));
 for ($i = 1; $i <= 12; ++$i) {
     verify(receive($receiver, webhookBody($i, $i + 10)) === 204, 'Webhook не наполнил очередь воркера.');
 }
 $lock = tmpfile();
-verify(is_resource($lock), 'Не создана временная блокировка.');
-$secondLock = fopen(stream_get_meta_data($lock)['uri'], 'r+');
-verify(is_resource($secondLock), 'Не открыт второй дескриптор блокировки.');
+if (!is_resource($lock)) {
+    throw new RuntimeException('Не создана временная блокировка.');
+}
+$secondLock = fopen(stream_get_meta_data($lock)['uri'] ?? throw new RuntimeException('У блокировки нет пути.'), 'r+');
+if (!is_resource($secondLock)) {
+    throw new RuntimeException('Не открыт второй дескриптор блокировки.');
+}
 try {
     $ai->beforeCall = static function () use ($pdo, $ai, $runner, $secondLock): void {
-        $before = $pdo->query('SELECT * FROM analysis_jobs ORDER BY message_id')->fetchAll(PDO::FETCH_ASSOC);
+        $before = testQuery($pdo, 'SELECT * FROM analysis_jobs ORDER BY message_id')->fetchAll(PDO::FETCH_ASSOC);
         verify(!$runner->workOnce($secondLock), 'Конкурирующий tick получил блокировку.');
-        verify($pdo->query('SELECT * FROM analysis_jobs ORDER BY message_id')->fetchAll(PDO::FETCH_ASSOC) === $before, 'Конкурирующий tick выполнил recover или изменил задания.');
+        verify(testQuery($pdo, 'SELECT * FROM analysis_jobs ORDER BY message_id')->fetchAll(PDO::FETCH_ASSOC) === $before, 'Конкурирующий tick выполнил recover или изменил задания.');
         verify(!$pdo->inTransaction(), 'Воркер вызвал ИИ внутри транзакции.');
         $ai->beforeCall = null;
     };
     verify($runner->workOnce($lock), 'Воркер не запустился.');
     verify(count($ai->calls) === 10 && $telegram->polls === [], 'Batch не конечен или вызвал getUpdates.');
-    verify((int) $pdo->query("SELECT COUNT(*) FROM analysis_jobs WHERE analysis_status = 'pending'")->fetchColumn() === 2, 'Остаток очереди потерян.');
+    verify((int) testQuery($pdo, "SELECT COUNT(*) FROM analysis_jobs WHERE analysis_status = 'pending'")->fetchColumn() === 2, 'Остаток очереди потерян.');
     verify($runner->workOnce($secondLock) && count($ai->calls) === 12, 'Следующий tick не продолжил очередь или lock остался занят.');
     verify($runner->workOnce($lock) && count($ai->calls) === 12 && $telegram->polls === [], 'Пустой tick повторил оценку или вызвал polling.');
 
     intake($runner, 13, 23, 'Искусственная вакансия после рестарта');
     new SqliteAnalysisRepository($pdo)->begin(ProcessingStage::Analysis, 13, time());
     verify($runner->workOnce($lock), 'Воркер не восстановился.');
-    verify($pdo->query('SELECT analysis_status FROM analysis_jobs WHERE message_id = 13')->fetchColumn() === 'pending'
+    verify(testQuery($pdo, 'SELECT analysis_status FROM analysis_jobs WHERE message_id = 13')->fetchColumn() === 'pending'
         && count($ai->calls) === 12, 'Recover потерял задание или проигнорировал задержку.');
     $pdo->exec('UPDATE analysis_jobs SET analysis_next_at = 0 WHERE message_id = 13');
     verify($runner->workOnce($secondLock) && $runner->workOnce($lock) && count($ai->calls) === 13, 'Recover повторил готовую оценку.');
-    verify((int) $pdo->query('SELECT analysis_attempts FROM analysis_jobs WHERE message_id = 13')->fetchColumn() === 2, 'Recover потерял учёт прерванной попытки.');
+    verify((int) testQuery($pdo, 'SELECT analysis_attempts FROM analysis_jobs WHERE message_id = 13')->fetchColumn() === 2, 'Recover потерял учёт прерванной попытки.');
 } finally {
     fclose($secondLock);
     fclose($lock);

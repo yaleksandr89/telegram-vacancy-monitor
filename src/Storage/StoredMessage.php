@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Yaleksandr\TelegramVacancyMonitor\Storage;
 
 /**
- * EN: A message ready for persistent storage, with optional verified channel origin.
  * RU: Сообщение для сохранения с необязательным подтверждённым источником-каналом.
+ * EN: A message ready for persistent storage, with optional verified channel origin.
  */
 final readonly class StoredMessage
 {

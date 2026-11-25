@@ -7,8 +7,8 @@ namespace Yaleksandr\TelegramVacancyMonitor\Telegram\Dto;
 use InvalidArgumentException;
 
 /**
- * EN: Parameters for receiving pending Bot API updates.
  * RU: Параметры получения ожидающих обновлений Bot API.
+ * EN: Parameters for receiving pending Bot API updates.
  */
 final readonly class GetUpdatesRequest
 {

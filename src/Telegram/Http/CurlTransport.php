@@ -7,14 +7,14 @@ namespace Yaleksandr\TelegramVacancyMonitor\Telegram\Http;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Exception\BotTransportException;
 
 /**
- * EN: HTTPS transport for Bot API requests using the PHP cURL extension.
  * RU: HTTPS-транспорт запросов Bot API через расширение PHP cURL.
+ * EN: HTTPS transport for Bot API requests using the PHP cURL extension.
  */
 final readonly class CurlTransport implements HttpTransport
 {
     /**
-     * EN: Uses fixed TLS-verifying cURL options and returns the raw HTTP response.
      * RU: Использует постоянные параметры cURL с проверкой TLS и возвращает HTTP-ответ.
+     * EN: Uses fixed TLS-verifying cURL options and returns the raw HTTP response.
      *
      * @throws BotTransportException
      */

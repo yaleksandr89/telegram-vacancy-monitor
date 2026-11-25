@@ -276,7 +276,7 @@ os.execv(os.environ['REAL_PHP'], [os.environ['REAL_PHP']]+sys.argv[1:])
         (self.app / 'runtime').mkdir()
         (self.app / 'runtime/PROVENANCE.json').write_text('{}')
         out = self.launch([2, 1, 1, 2, 6])
-        self.assertIn('PHP CLI поставки: 8.5.12+', out)
+        self.assertIn('PHP CLI поставки: 8.5.13+', out)
 
     def test_webhook(self):
         self.config.write_text(self.config.read_text() + 'TELEGRAM_RECEIVE_MODE="webhook"\n')
