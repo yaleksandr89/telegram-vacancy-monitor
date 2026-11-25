@@ -52,12 +52,14 @@ class BuildBoundary(unittest.TestCase):
                 previous, metadata, manifest = self.unix_fixture(base, target)
                 with mock.patch.object(packaging, 'ROOT', base):
                     packaging.verify_unix_reuse(previous, metadata, manifest, target)
-                    for action in ['empty', 'missing', 'extra', 'changed', 'target']:
+                    for action in ['empty', 'missing', 'extra', 'changed', 'previous-php', 'target']:
                         bad = copy.deepcopy(metadata)
                         if action == 'empty': bad['inputs'] = {}
                         if action == 'missing': del bad['inputs']['php']
                         if action == 'extra': bad['inputs']['unknown'] = {}
                         if action == 'changed': bad['inputs']['php']['sha256'] = '0' * 64
+                        if action == 'previous-php':
+                            bad['inputs']['php']['sha256'] = '08bc2eba2a588654ade1357174aa646b761556c862dda0678345ee29ed481209'
                         if action == 'target': bad['target'] = 'windows-x64'
                         with self.subTest(action=action), self.assertRaisesRegex(ValueError, 'inputs/target'):
                             packaging.verify_unix_reuse(previous, bad, manifest, target)
@@ -261,6 +263,11 @@ class BuildBoundary(unittest.TestCase):
                 return real_output(args, **kwargs)
 
             def run(args, **kwargs):
+                if 'dump-autoload' in args:
+                    self.assertEqual(['dump-autoload', '--no-dev', '--no-scripts', '--no-plugins',
+                                      '--no-interaction', '--optimize'], args[3:])
+                    self.assertEqual('1', kwargs['env']['COMPOSER_DISABLE_NETWORK'])
+                    self.assertFalse((Path(args[2].removeprefix('--working-dir=')) / 'vendor').exists())
                 if 'build' in args:
                     Path(args[args.index('-o') + 1]).write_bytes(self.pe())
 
@@ -292,6 +299,14 @@ class BuildBoundary(unittest.TestCase):
                     with zipfile.ZipFile(previous) as z:
                         prefix = 'telegram-vacancy-monitor/'
                         manifest = json.loads(z.read(prefix + 'SHA256SUMS.json'))
+                        provenance = json.loads(z.read(prefix + 'runtime/PROVENANCE.json'))
+                        for name in ['composer.json', 'composer.lock', 'config/profile/README.md',
+                                     'docs/langs/ru/local-gum.md', 'docs/langs/ru/vds-webhook.md',
+                                     'config/bot.example.ini']:
+                            self.assertEqual((ROOT / name).read_bytes(), z.read(prefix + name))
+                            self.assertEqual(packaging.digest(ROOT / name), provenance['source_sha256'][name])
+                        self.assertFalse(any(name.startswith(('vendor/bin/', 'vendor/phpstan/', 'vendor/friendsofphp/',
+                                                              'tests/', 'config/profile/local/')) for name in manifest))
                         project_license = (ROOT / 'LICENSE').read_bytes()
                         self.assertEqual(project_license, z.read(prefix + 'LICENSE'))
                         self.assertEqual(hashlib.sha256(project_license).hexdigest(), manifest['LICENSE'])
@@ -336,6 +351,44 @@ class BuildBoundary(unittest.TestCase):
                 with self.subTest(action=action), self.assertRaises(ValueError):
                     packaging.verify_windows_reuse(previous, bad_metadata, old_manifest)
 
+    def test_composer_graph(self):
+        with tempfile.TemporaryDirectory() as directory:
+            package = Path(directory)
+            requirements = {'php': '^8.5', 'ext-curl': '*'}
+            root = package / 'composer.json'
+            root.write_text(json.dumps({'require': requirements}))
+            lock = {'platform': requirements, 'packages': [], 'packages-dev': [{'name': 'phpstan/phpstan', 'version': '2.3.7'}]}
+            path = package / 'composer.lock'
+            path.write_text(json.dumps(lock))
+            packaging.validate_composer(package)
+            for key, value in [('packages', [{}]), ('packages', {}), ('packages-dev', {}), ('packages-dev', [{}]),
+                               ('platform', {}), ('packages', None), ('packages-dev', None)]:
+                bad = dict(lock)
+                if value is None:
+                    del bad[key]
+                else:
+                    bad[key] = value
+                path.write_text(json.dumps(bad))
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                    packaging.validate_composer(package)
+            injected = dict(requirements, **{'example/library': '*'})
+            root.write_text(json.dumps({'require': injected}))
+            path.write_text(json.dumps(dict(lock, platform=injected)))
+            with self.assertRaises(ValueError):
+                packaging.validate_composer(package)
+
+    def test_php_signer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            with mock.patch.object(packaging, 'fetch', return_value=work / 'input'), mock.patch.object(packaging, 'run'), \
+                    mock.patch.object(packaging.subprocess, 'check_output') as verifier:
+                verifier.return_value = '[GNUPG:] VALIDSIG D95C03BC702BE9515344AE3374E44BC9067701A5 2026-01-01'
+                with self.assertRaisesRegex(ValueError, 'release manager'):
+                    packaging.verify_pgp('php', packaging.PHP_SIGNER, work, work, True)
+                verifier.side_effect = packaging.subprocess.CalledProcessError(1, 'gpgv')
+                with self.assertRaises(packaging.subprocess.CalledProcessError):
+                    packaging.verify_pgp('php', packaging.PHP_SIGNER, work, work, True)
+
     def test_pins(self):
         for artifact in packaging.INPUTS.values():
             self.assertEqual(64, len(artifact["sha256"]))
@@ -345,7 +398,7 @@ class BuildBoundary(unittest.TestCase):
     def test_corrupt_input(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
-            (path / "php-8.5.12.tar.xz").write_bytes(b"corrupt")
+            (path / "php-8.5.13.tar.xz").write_bytes(b"corrupt")
             with self.assertRaises(ValueError):
                 packaging.fetch("php", path, True)
 

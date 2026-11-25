@@ -12,31 +12,45 @@ use Yaleksandr\TelegramVacancyMonitor\Application\Exception\ConfigurationExcepti
  */
 final readonly class ConservativePrefilter
 {
+    /** @var list<string> */
+    private array $exactRejectLines;
+    /** @var list<string> */
+    private array $ambiguityTerms;
+
     /**
      * RU: Принимает буквальные однострочные правила, не выполняя и не интерпретируя их.
      * EN: Accepts literal single-line rules without executing or interpreting them.
      *
-     * @param list<string> $exactRejectLines
-     * @param list<string> $ambiguityTerms
+     * @param array<array-key, mixed> $exactRejectLines
+     * @param array<array-key, mixed> $ambiguityTerms
      * @throws ConfigurationException
      */
-    public function __construct(private array $exactRejectLines = [], private array $ambiguityTerms = [])
+    public function __construct(array $exactRejectLines = [], array $ambiguityTerms = [])
+    {
+        $this->exactRejectLines = self::validateRules($exactRejectLines);
+        $this->ambiguityTerms = self::validateRules($ambiguityTerms);
+    }
+
+    /**
+     * @param array<array-key, mixed> $rules
+     * @return list<string>
+     */
+    private static function validateRules(array $rules): array
     {
         // RU: Управляющие символы, невидимое форматирование и разделители строк недопустимы в однострочном правиле.
         // EN: Controls, invisible formatting and line separators cannot form a safe single-line rule.
-        foreach ([$exactRejectLines, $ambiguityTerms] as $rules) {
-            if (!array_is_list($rules)) {
-                throw new ConfigurationException('Правила предфильтра должны быть списком строк INI.');
-            }
-            foreach ($rules as $rule) {
-                if (
-                    !is_string($rule) || !mb_check_encoding($rule, 'UTF-8') || mb_trim($rule, encoding: 'UTF-8') === ''
-                    || preg_match('/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u', $rule) === 1
-                ) {
-                    throw new ConfigurationException('Правило предфильтра должно быть непустой строкой UTF-8 без управляющих символов.');
-                }
+        if (!array_is_list($rules)) {
+            throw new ConfigurationException('Правила предфильтра должны быть списком строк INI.');
+        }
+        foreach ($rules as $rule) {
+            if (
+                !is_string($rule) || !mb_check_encoding($rule, 'UTF-8') || mb_trim($rule, encoding: 'UTF-8') === ''
+                || preg_match('/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u', $rule) === 1
+            ) {
+                throw new ConfigurationException('Правило предфильтра должно быть непустой строкой UTF-8 без управляющих символов.');
             }
         }
+        return $rules;
     }
 
     /**

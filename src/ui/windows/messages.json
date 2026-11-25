@@ -92,8 +92,8 @@
     "## Where to start?\nChoose a topic. Each topic offers a return to this list or the main menu."
   ],
   "help_quick": [
-    "## Быстрый старт\n- Распакуйте архив для вашей ОС в доступную для записи папку.\n- Создайте `config/bot.ini` по `config/bot.example.ini`.\n- Впишите токен бота; отправьте ему `/start`.\n- Узнайте ID через меню и укажите разрешённого пользователя в INI.\n- Подготовьте два приватных Markdown-файла профиля.\n- Выполните проверку готовности, затем запустите мониторинг.\n\nПодробности: `docs/guides/local-gum.md`.",
-    "## Quick start\n- Extract the archive for your OS into a writable folder.\n- Create `config/bot.ini` from `config/bot.example.ini`.\n- Set the bot token; send `/start` to the bot.\n- Find your ID using the menu and set the allowed user in the INI.\n- Prepare the two private Markdown profile files.\n- Check readiness, then start monitoring.\n\nDetails: `docs/guides/local-gum.md`."
+    "## Быстрый старт\n- Распакуйте архив для вашей ОС в доступную для записи папку.\n- Создайте `config/bot.ini` по `config/bot.example.ini`.\n- Впишите токен бота; отправьте ему `/start`.\n- Узнайте ID через меню и укажите разрешённого пользователя в INI.\n- Подготовьте два приватных Markdown-файла профиля.\n- Выполните проверку готовности, затем запустите мониторинг.\n\nПодробности: `docs/langs/ru/local-gum.md`.",
+    "## Quick start\n- Extract the archive for your OS into a writable folder.\n- Create `config/bot.ini` from `config/bot.example.ini`.\n- Set the bot token; send `/start` to the bot.\n- Find your ID using the menu and set the allowed user in the INI.\n- Prepare the two private Markdown profile files.\n- Check readiness, then start monitoring.\n\nDetails: `docs/langs/ru/local-gum.md`."
   ],
   "help_processing": [
     "## Обработка вакансий\n- Отправляйте или пересылайте боту текст в личном чате.\n- Принимаются сообщения только разрешённого пользователя.\n- Бот сохраняет вакансию в SQLite и выполняет настроенный AI-анализ.\n- История произвольных каналов автоматически не собирается.\n- Для остановки мониторинга и приложения нажмите Ctrl+C.\n\nНе запускайте два polling-процесса одного бота.",
@@ -108,8 +108,8 @@
     "## Local model and connection\n- Start your OpenAI-compatible model server separately.\n- Set `AI_PROVIDER_LOCATION=\"local\"`.\n- Set `AI_BASE_URL`, for example `http://127.0.0.1:1234/v1`.\n- Set `AI_MODEL` and a key if required by the server.\n- Check the model and server compatibility using its documentation.\n\nReadiness is offline and does not test connections.\nThe app does not install models or open network ports."
   ],
   "help_vds": [
-    "## VDS и устранение проблем\n- Локальный мониторинг использует `polling` и `getUpdates`.\n- При активном webhook команды запуска и поиска ID недоступны.\n- Регистрацией и снятием webhook управляет владелец.\n- Меню не переключает режим и не удаляет ожидающие обновления.\n- При ошибке проверьте готовность и отсутствие второго процесса.\n\nДля сервера: `docs/guides/vds-webhook.md`.\nПубличная HTTP-точка в локальный архив не включена.",
-    "## VDS and troubleshooting\n- Local monitoring uses `polling` and `getUpdates`.\n- An active webhook blocks monitoring and ID lookup.\n- The owner registers and removes the webhook.\n- Menus do not switch modes or discard pending updates.\n- On failure, check readiness and ensure no other instance is running.\n\nServer guide: `docs/guides/vds-webhook.md`.\nThe public HTTP entry point is excluded from local archives."
+    "## VDS и устранение проблем\n- Локальный мониторинг использует `polling` и `getUpdates`.\n- При активном webhook команды запуска и поиска ID недоступны.\n- Регистрацией и снятием webhook управляет владелец.\n- Меню не переключает режим и не удаляет ожидающие обновления.\n- При ошибке проверьте готовность и отсутствие второго процесса.\n\nДля сервера: `docs/langs/ru/vds-webhook.md`.\nПубличная HTTP-точка в локальный архив не включена.",
+    "## VDS and troubleshooting\n- Local monitoring uses `polling` and `getUpdates`.\n- An active webhook blocks monitoring and ID lookup.\n- The owner registers and removes the webhook.\n- Menus do not switch modes or discard pending updates.\n- On failure, check readiness and ensure no other instance is running.\n\nServer guide: `docs/langs/ru/vds-webhook.md`.\nThe public HTTP entry point is excluded from local archives."
   ],
   "details": [
     "Подробнее",
@@ -280,8 +280,8 @@
     "Previous IDs"
   ],
   "php_bundle": [
-    "PHP CLI поставки: 8.5.12+ в ветке 8.5",
-    "Bundle PHP CLI: 8.5.12+ in the 8.5 branch"
+    "PHP CLI поставки: 8.5.13+ в ветке 8.5",
+    "Bundle PHP CLI: 8.5.13+ in the 8.5 branch"
   ],
   "exit_code": [
     "Код завершения",

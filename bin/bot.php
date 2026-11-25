@@ -30,6 +30,7 @@ if (PHP_SAPI !== 'cli') {
 
 $root = dirname(__DIR__);
 require $root . '/vendor/autoload.php';
+$argv ??= [];
 $identifyJson = ($argv[1] ?? null) === 'identify' && ($argv[2] ?? null) === '--json';
 $mode = $argv[1] ?? 'run';
 
@@ -75,7 +76,7 @@ try {
         }
     }
 
-    $token = is_array($config) ? ($config['TELEGRAM_BOT_TOKEN'] ?? null) : null;
+    $token = $config['TELEGRAM_BOT_TOKEN'] ?? null;
 
     if (!is_string($token) || preg_match('/\A\d+:[A-Za-z0-9_-]+\z/D', $token) !== 1) {
         throw new ConfigurationException('Укажите корректный TELEGRAM_BOT_TOKEN в config/bot.ini.');

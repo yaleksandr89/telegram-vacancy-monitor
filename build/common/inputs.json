@@ -1,11 +1,11 @@
 {
   "php": {
-    "url": "https://www.php.net/distributions/php-8.5.12.tar.xz",
-    "sha256": "08bc2eba2a588654ade1357174aa646b761556c862dda0678345ee29ed481209"
+    "url": "https://www.php.net/distributions/php-8.5.13.tar.xz",
+    "sha256": "607602acaf0c3061818e9916ec44a058e8b3d43959a83862b9cd3ec7bf5b785f"
   },
   "php-windows": {
-    "url": "https://downloads.php.net/~windows/releases/archives/php-8.5.12-1-nts-Win32-vs17-x64.zip",
-    "sha256": "2a36a2edcb7a5b9252f638fd5e4cf84d7f6e066092654220dc0b63e5cf4e9723"
+    "url": "https://downloads.php.net/~windows/releases/php-8.5.13-nts-Win32-vs17-x64.zip",
+    "sha256": "4ae6c72bc0ca4f6b8f3e9b107874bae0135699f3aabe6c26a1f6103d040eea97"
   },
   "curl": {
     "url": "https://curl.se/download/curl-8.23.0.tar.xz",
@@ -33,8 +33,8 @@
     "sha256": "427c064216761a1e72a8b30f0d954d08cb6e4435a82091fb865afd20c8497285"
   },
   "php-signature": {
-    "url": "https://www.php.net/distributions/php-8.5.12.tar.xz.asc",
-    "sha256": "ee9317cb40874ee4f733298e3159197a39e602020f8229c16d1bedf1aaefd242"
+    "url": "https://www.php.net/distributions/php-8.5.13.tar.xz.asc",
+    "sha256": "d67da4186dfd143d8326e6bb12ed1186dba89e50501ea370f8514bf52dd7ebd5"
   },
   "php-keyring": {
     "url": "https://www.php.net/distributions/php-keyring.gpg",

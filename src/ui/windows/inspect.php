@@ -13,11 +13,12 @@ use Yaleksandr\TelegramVacancyMonitor\Analysis\ProviderLocation;
 
 error_reporting(0);
 $root = dirname(__DIR__, 3);
+$argv ??= [];
 $action = $argv[1] ?? 'check';
 
 function phpVersionSupported(int $versionId, bool $bundle): bool
 {
-    return $bundle ? $versionId >= 80512 && $versionId < 80600 : $versionId >= 80500 && $versionId < 90000;
+    return $bundle ? $versionId >= 80513 && $versionId < 80600 : $versionId >= 80500 && $versionId < 90000;
 }
 
 function diagnosticPath(string $path, string $root): bool
@@ -43,7 +44,9 @@ function diagnosticCategory(string $text, string $previous): string
         return 'conflict';
     }
     if (preg_match('/Ошибка Bot API \\(HTTP [0-9]+, API (401|403|429)\\)/', $text, $match) === 1) {
-        return match ($match[1]) { '401' => 'auth', '403' => 'access', '429' => 'rate' };
+        return match ($match[1]) {
+            '401' => 'auth', '403' => 'access', '429' => 'rate',
+        };
     }
     if (str_contains($text, 'Ошибка: Укажите') || str_contains($text, 'config/bot.ini')
         || str_contains($text, 'файл профиля') || str_contains($text, 'профиль кандидата')
@@ -148,7 +151,11 @@ $bundle = ($argv[2] ?? '') === 'bundle' || getenv('VM_PORTABLE') === '1'
 $phpSupported = PHP_SAPI === 'cli' && phpVersionSupported(PHP_VERSION_ID, $bundle);
 
 if ($action === 'texts') {
-    foreach (json_decode(file_get_contents(__DIR__ . '/messages.json'), true, flags: JSON_THROW_ON_ERROR) as $key => $texts) {
+    $messages = file_get_contents(__DIR__ . '/messages.json');
+    if ($messages === false) {
+        exit(1);
+    }
+    foreach (json_decode($messages, true, flags: JSON_THROW_ON_ERROR) as $key => $texts) {
         echo $key . "\0" . $texts[0] . "\0" . $texts[1] . "\0";
     }
     exit(0);

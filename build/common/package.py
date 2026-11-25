@@ -17,6 +17,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
 INPUTS = json.loads((ROOT / "build/common/inputs.json").read_text())
+PHP_SIGNER = '49D9AF6BC72A80D6691719C8AA23F5BE9C7097D4'
 WINDOWS_CRT = json.loads((ROOT / "build/common/windows-crt.json").read_text())
 
 
@@ -340,12 +341,12 @@ def verify_macos_dependencies(output):
 
 
 def source_runtime(work, runtime, cache, offline, target):
-    verify_pgp('php', 'D95C03BC702BE9515344AE3374E44BC9067701A5', work, cache, offline)
+    verify_pgp('php', PHP_SIGNER, work, cache, offline)
     if target == 'linux-x86_64':
         verify_pgp('curl', '27EDEAF22F3ABCEB50DB9A125CC908FDB71E12C2', work, cache, offline)
     for key in ["php"] + (["curl", "sqlite"] if target == "linux-x86_64" else []):
         extract(fetch(key, cache, offline), work / key)
-    php = work / "php/php-8.5.12"
+    php = work / "php/php-8.5.13"
     prefix = work / "deps"
     env = os.environ.copy()
     env.pop("CONFIG_SITE", None)
@@ -410,6 +411,23 @@ def source_runtime(work, runtime, cache, offline, target):
         run(["codesign", "--force", "--sign", "-", runtime / "php"])
 
 
+def validate_composer(package):
+    requirements = json.loads((package / 'composer.json').read_text())['require']
+    lock = json.loads((package / 'composer.lock').read_text())
+    if (not isinstance(requirements, dict) or 'php' not in requirements
+            or any((key != 'php' and not re.fullmatch(r'ext-[a-z0-9_]+', key))
+                   or not isinstance(value, str) or not value for key, value in requirements.items())
+            or not isinstance(lock, dict) or lock.get('platform') != requirements
+            or lock.get('packages') != []):
+        raise ValueError('Недопустимые runtime-зависимости Composer')
+    development = lock.get('packages-dev')
+    if not isinstance(development, list) or not all(
+            isinstance(entry, dict) and isinstance(entry.get('name'), str)
+            and re.fullmatch(r'[a-z0-9_.-]+/[a-z0-9_.-]+', entry['name'])
+            and isinstance(entry.get('version'), str) and entry['version'] for entry in development):
+        raise ValueError('Некорректный список dev-зависимостей Composer')
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", choices=["linux-x86_64", "windows-x64", "macos-arm64"], required=True)
@@ -456,7 +474,7 @@ def main():
         if target == 'windows' and (args.runtime_bundle.is_symlink() or not args.runtime_bundle.is_file()):
             raise ValueError('Runtime archive должен быть обычным файлом')
         if target != 'windows':
-            verify_pgp('php', 'D95C03BC702BE9515344AE3374E44BC9067701A5', work, args.cache, args.offline)
+            verify_pgp('php', PHP_SIGNER, work, args.cache, args.offline)
         if target == 'linux':
             verify_pgp('curl', '27EDEAF22F3ABCEB50DB9A125CC908FDB71E12C2', work, args.cache, args.offline)
         if digest(args.runtime_bundle) != args.runtime_sha256:
@@ -490,9 +508,9 @@ def main():
     if target != 'windows':
         php_notices = work / 'php-notices'
         extract(fetch('php', args.cache, args.offline), php_notices)
-        for file in (php_notices / 'php-8.5.12').rglob('*'):
+        for file in (php_notices / 'php-8.5.13').rglob('*'):
             if file.is_file() and file.name.upper().startswith(('LICENSE', 'COPYING', 'NOTICE')):
-                copy_file(file, runtime / 'notices/php-components' / file.relative_to(php_notices / 'php-8.5.12'))
+                copy_file(file, runtime / 'notices/php-components' / file.relative_to(php_notices / 'php-8.5.13'))
     if target == 'linux':
         for name in ['Apache-2.0', 'LGPL-2.1', 'GPL-3', 'GPL-2', 'LGPL-3', 'MPL-2.0']:
             copy_file(Path('/usr/share/common-licenses') / name, runtime / 'notices/common-licenses' / name)
@@ -500,14 +518,11 @@ def main():
     files = [p for p in tracked if p.endswith(".php") and p != 'src/Application/WebhookReceiver.php']
     files += ["LICENSE", "bin/bot.php", "bin/vacancy-monitor.sh", "composer.json", "composer.lock",
               "config/bot.example.ini", "config/profile/README.md", "config/profile/instructions.example.md",
-              "docs/guides/local-gum.md", "docs/guides/vds-webhook.md"]
-    for tree in ["src/ui/gum", "src/ui/windows"]:
-        files += [p.relative_to(ROOT).as_posix() for p in (ROOT / tree).rglob("*") if p.is_file()]
+              "docs/langs/ru/local-gum.md", "docs/langs/ru/vds-webhook.md"]
+    files.extend(p for p in tracked if p.startswith(("src/ui/gum/", "src/ui/windows/")))
     for name in sorted(set(files)):
         copy_file(ROOT / name, package / name)
-    lock = json.loads((package / 'composer.lock').read_text())
-    if lock['packages'] or lock['packages-dev']:
-        raise ValueError('Для новых Composer-зависимостей нужен отдельный проверенный build contract')
+    validate_composer(package)
     composer_env = os.environ.copy()
     composer_env['COMPOSER_DISABLE_NETWORK'] = '1'
     run([args.build_php, args.composer, "--working-dir=" + str(package), "dump-autoload", "--no-dev",

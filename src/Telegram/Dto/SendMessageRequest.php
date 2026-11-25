@@ -7,8 +7,8 @@ namespace Yaleksandr\TelegramVacancyMonitor\Telegram\Dto;
 use InvalidArgumentException;
 
 /**
- * EN: A plain-text reply addressed to a Bot API chat.
  * RU: Текстовый ответ, адресованный чату через Bot API.
+ * EN: A plain-text reply addressed to a Bot API chat.
  */
 final readonly class SendMessageRequest
 {

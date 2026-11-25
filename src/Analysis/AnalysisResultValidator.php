@@ -52,8 +52,16 @@ final readonly class AnalysisResultValidator
         }
 
         return new AnalysisResult(
-            $data['company'], $data['position'], Verdict::from($data['verdict']), Priority::from($data['priority']),
-            $data['matches'], $data['risks'], $data['geography'], $data['pay'], $data['missing'], $data['rationale'],
+            $data['company'],
+            $data['position'],
+            Verdict::from($data['verdict']),
+            Priority::from($data['priority']),
+            $data['matches'],
+            $data['risks'],
+            $data['geography'],
+            $data['pay'],
+            $data['missing'],
+            $data['rationale'],
         );
     }
 

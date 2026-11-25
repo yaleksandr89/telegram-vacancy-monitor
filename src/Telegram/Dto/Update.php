@@ -7,8 +7,8 @@ namespace Yaleksandr\TelegramVacancyMonitor\Telegram\Dto;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Exception\UnexpectedResponseException;
 
 /**
- * EN: A Bot API update with an optional ordinary message.
  * RU: Обновление Bot API с необязательным обычным сообщением.
+ * EN: A Bot API update with an optional ordinary message.
  */
 final readonly class Update
 {
@@ -18,8 +18,8 @@ final readonly class Update
     ) {}
 
     /**
-     * EN: Reject malformed update identifiers rather than losing the processing cursor.
      * RU: Отклоняет некорректный ID обновления, чтобы не потерять позицию обработки.
+     * EN: Reject malformed update identifiers rather than losing the processing cursor.
      *
      * @param array<string, mixed> $payload
      * @throws UnexpectedResponseException

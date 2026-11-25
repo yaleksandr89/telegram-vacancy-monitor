@@ -12,6 +12,7 @@ use Yaleksandr\TelegramVacancyMonitor\Telegram\Http\HttpTransport;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
+/** @phpstan-assert true $condition */
 function verifyWebhook(bool $condition, string $message): void
 {
     if (!$condition) {
@@ -118,7 +119,7 @@ foreach ([
 }
 
 foreach (['false', '1', '"true"'] as $result) {
-    foreach ([$bot->deleteWebhook(...), static fn () => $bot->setWebhook($url, $secret)] as $changeWebhook) {
+    foreach ([$bot->deleteWebhook(...), static fn() => $bot->setWebhook($url, $secret)] as $changeWebhook) {
         $transport->responses[] = new HttpResponse(200, '{"ok":true,"result":' . $result . '}');
         try {
             $changeWebhook();

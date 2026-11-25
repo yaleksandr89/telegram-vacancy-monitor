@@ -24,11 +24,11 @@ final readonly class SqliteSchema
         $this->pdo->beginTransaction();
         try {
             $this->ensureTables();
-            $columns = $this->pdo->query('PRAGMA table_info(analysis_jobs)')->fetchAll(PDO::FETCH_ASSOC);
+            $columns = ($this->pdo->query('PRAGMA table_info(analysis_jobs)') ?: throw new \RuntimeException('Не выполнен запрос SQLite.'))->fetchAll(PDO::FETCH_ASSOC);
             if (!in_array('analysis_start_claimed', array_column($columns, 'name'), true)) {
                 $this->pdo->exec('ALTER TABLE analysis_jobs ADD COLUMN analysis_start_claimed INTEGER NOT NULL DEFAULT 0 CHECK (analysis_start_claimed IN (0, 1))');
             }
-            $columns = $this->pdo->query('PRAGMA table_info(cursor)')->fetchAll(PDO::FETCH_ASSOC);
+            $columns = ($this->pdo->query('PRAGMA table_info(cursor)') ?: throw new \RuntimeException('Не выполнен запрос SQLite.'))->fetchAll(PDO::FETCH_ASSOC);
             if (!in_array('last_handled_at', array_column($columns, 'name'), true)) {
                 $this->pdo->exec('ALTER TABLE cursor ADD COLUMN last_handled_at INTEGER');
             }

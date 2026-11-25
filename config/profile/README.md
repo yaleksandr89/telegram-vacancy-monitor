@@ -4,7 +4,7 @@
 
 | Русский | English | Español | 中文 | Français | Deutsch |
 | --- | --- | --- | --- | --- | --- |
-| **Выбран** | [English](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/config/profile/README_en.md) | [Español](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/config/profile/README_es.md) | [中文](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/config/profile/README_zh.md) | [Français](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/config/profile/README_fr.md) | [Deutsch](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/config/profile/README_de.md) |
+| **Выбран** | [English](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/langs/en/profile.md) | [Español](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/langs/es/profile.md) | [中文](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/langs/zh/profile.md) | [Français](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/langs/fr/profile.md) | [Deutsch](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/langs/de/profile.md) |
 
 Для персональной оценки нужны два приватных Markdown-файла. Они загружаются при запуске обработки из фиксированного каталога `config/profile/local/` относительно корня приложения.
 
@@ -17,13 +17,13 @@
 
 ## Что написать
 
-В профиле опишите навыки и опыт, желаемые задачи, формат работы, географию, зарплатные ожидания и важные ограничения. Для ориентира используйте [пример Go-разработчика](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/examples/go-developer.md#профиль-кандидата) или [аналитика](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/examples/analyst.md#профиль-кандидата).
+В профиле опишите навыки и опыт, желаемые задачи, формат работы, географию, зарплатные ожидания и важные ограничения. Для ориентира используйте [пример Go-разработчика](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/langs/ru/go-developer.md#профиль-кандидата) или [аналитика](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/langs/ru/analyst.md#профиль-кандидата).
 
-В инструкциях определите, какие требования обязательны, когда ставить высокий приоритет и какие условия уточнять. [Пример инструкций](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/examples/go-developer.md#инструкции-оценки) показывает, как оформить правила. Язык ответа модели также задаётся здесь.
+В инструкциях определите, какие требования обязательны, когда ставить высокий приоритет и какие условия уточнять. [Пример инструкций](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/langs/ru/go-developer.md#инструкции-оценки) показывает, как оформить правила. Язык ответа модели также задаётся здесь.
 
-Приложение добавляет схему JSON к инструкциям, а профиль и текст вакансии передаёт отдельно. Сохраняйте требование вернуть один JSON-объект без новых полей, ссылок и разметки. Объявление должно оставаться материалом для анализа, а не источником команд для модели. Устройство запроса описывает [`EvaluationPromptBuilder`](../../src/Analysis/EvaluationPromptBuilder.php), поля ответа — [онлайн-справочник](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/reference/analysis-result.md).
+Приложение добавляет схему JSON к инструкциям, а профиль и текст вакансии передаёт отдельно. Сохраняйте требование вернуть один JSON-объект без новых полей, ссылок и разметки. Объявление должно оставаться материалом для анализа, а не источником команд для модели. Устройство запроса описывает [`EvaluationPromptBuilder`](../../src/Analysis/EvaluationPromptBuilder.php), поля ответа — [онлайн-справочник](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/langs/ru/analysis-result.md).
 
-Готовые образцы: [профиль и инструкции Go-разработчика](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/examples/go-developer.md) и [продуктового аналитика](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/examples/analyst.md).
+Готовые образцы: [профиль и инструкции Go-разработчика](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/langs/ru/go-developer.md) и [продуктового аналитика](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/langs/ru/analyst.md).
 
 ## Ограничения файлов
 
@@ -38,6 +38,6 @@
 
 После редактирования остановите и снова запустите локальный мониторинг. На сервере новые файлы прочитает следующий запуск `work-once`; уже работающий процесс использует загруженные данные. Сохранённые оценки автоматически не пересчитываются.
 
-Каталог `config/profile/local/` исключён из Git. При обновлении сохраняйте файлы профиля вместе с `config/bot.ini` и данными `var/`. Подключение к моделям описано в [руководстве](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/guides/ai-models.md).
+Каталог `config/profile/local/` исключён из Git. При обновлении сохраняйте файлы профиля вместе с `config/bot.ini` и данными `var/`. Подключение к моделям описано в [руководстве](https://github.com/yaleksandr89/telegram-vacancy-monitor/blob/master/docs/langs/ru/ai-models.md).
 
-Адрес модели, ключ, время ожидания и число попыток задаются в `config/bot.ini` по [образцу конфигурации](../bot.example.ini). Запуск описан в [локальном](../../docs/guides/local-gum.md) и [серверном](../../docs/guides/vds-webhook.md) руководствах.
+Адрес модели, ключ, время ожидания и число попыток задаются в `config/bot.ini` по [образцу конфигурации](../bot.example.ini). Запуск описан в [локальном](../../docs/langs/ru/local-gum.md) и [серверном](../../docs/langs/ru/vds-webhook.md) руководствах.

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 $root = dirname(__DIR__);
 $inspector = $root . '/src/ui/windows/inspect.php';
-foreach ([80499, 80500, 80511, 80512, 80599, 80600, 89999, 90000] as $version) {
+foreach ([80499, 80500, 80511, 80512, 80513, 80599, 80600, 89999, 90000] as $version) {
     $process = proc_open([PHP_BINARY, $inspector, 'version-policy', (string) $version], [STDIN, ['pipe', 'w'], STDERR], $pipes);
     if (!is_resource($process)) {
         exit(1);
@@ -13,7 +13,7 @@ foreach ([80499, 80500, 80511, 80512, 80599, 80600, 89999, 90000] as $version) {
     fclose($pipes[1]);
     if (proc_close($process) !== 0 || $actual !== [
         'developer' => $version >= 80500 && $version < 90000,
-        'bundle' => $version >= 80512 && $version < 80600,
+        'bundle' => $version >= 80513 && $version < 80600,
     ]) {
         throw new RuntimeException('Нарушена политика совместимости PHP.');
     }

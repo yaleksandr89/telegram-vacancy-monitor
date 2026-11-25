@@ -24,6 +24,7 @@ final readonly class SqliteAnalysisRepository
      * EN: Returns the first due job for the selected stage.
      *
      * @throws PDOException
+     * @return array<string, mixed>|null
      */
     public function due(ProcessingStage $stage, int $now): ?array
     {
@@ -46,10 +47,10 @@ final readonly class SqliteAnalysisRepository
      */
     public function nextDueAt(): ?int
     {
-        $value = $this->pdo->query("SELECT MIN(due_at) FROM (
+        $value = ($this->pdo->query("SELECT MIN(due_at) FROM (
             SELECT analysis_next_at AS due_at FROM analysis_jobs WHERE analysis_status = 'pending'
             UNION ALL SELECT delivery_next_at FROM analysis_jobs WHERE delivery_status = 'pending'
-        )")->fetchColumn();
+        )") ?: throw new \RuntimeException('Не выполнен запрос SQLite.'))->fetchColumn();
 
         return $value === null || $value === false ? null : (int) $value;
     }
@@ -59,12 +60,13 @@ final readonly class SqliteAnalysisRepository
      * EN: Returns attempts interrupted while in progress.
      *
      * @throws PDOException
+     * @return array<int, array<string, mixed>>
      */
     public function interrupted(ProcessingStage $stage): array
     {
         $stageName = $stage->value;
-        return $this->pdo->query("SELECT j.*, m.body, m.origin_type, m.origin_chat_id, m.origin_message_id, m.recipient_message_id FROM analysis_jobs j
-            JOIN messages m ON m.id = j.message_id WHERE {$stageName}_status = 'in_progress'")->fetchAll(PDO::FETCH_ASSOC);
+        return ($this->pdo->query("SELECT j.*, m.body, m.origin_type, m.origin_chat_id, m.origin_message_id, m.recipient_message_id FROM analysis_jobs j
+            JOIN messages m ON m.id = j.message_id WHERE {$stageName}_status = 'in_progress'") ?: throw new \RuntimeException('Не выполнен запрос SQLite.'))->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /**
@@ -92,6 +94,7 @@ final readonly class SqliteAnalysisRepository
     /**
      * RU: Фиксирует единственную попытку уведомления до HTTP; после сбоя claim не снимается.
      * EN: Claims the single notification attempt before HTTP; crashes do not reset the claim.
+     * @phpstan-impure
      */
     public function claimAnalysisStart(int $id): bool
     {

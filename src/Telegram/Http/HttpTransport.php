@@ -7,14 +7,14 @@ namespace Yaleksandr\TelegramVacancyMonitor\Telegram\Http;
 use Yaleksandr\TelegramVacancyMonitor\Telegram\Exception\BotTransportException;
 
 /**
- * EN: Sends Bot API requests and allows deterministic tests without network access.
  * RU: Отправляет запросы Bot API и позволяет тестировать код без сети.
+ * EN: Sends Bot API requests and allows deterministic tests without network access.
  */
 interface HttpTransport
 {
     /**
-     * EN: Never include the URL in diagnostics: it contains the bot token.
      * RU: Никогда не включать URL в диагностику: он содержит токен бота.
+     * EN: Never include the URL in diagnostics: it contains the bot token.
      *
      * @throws BotTransportException
      */

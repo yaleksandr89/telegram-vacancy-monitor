@@ -76,7 +76,7 @@ final readonly class IncomingUpdateProcessor
 
         try {
             $this->bot->sendMessage(new SendMessageRequest($chatId, $reply));
-        } catch (BotApiException | BotTransportException | UnexpectedResponseException) {
+        } catch (BotApiException|BotTransportException|UnexpectedResponseException) {
             // RU: Обновление уже сохранено; ошибка подтверждения не должна повторять приём.
             // EN: The update is durable; failed acknowledgement must not replay intake.
             error_log('Не удалось отправить подтверждение сохранённого обновления.');
