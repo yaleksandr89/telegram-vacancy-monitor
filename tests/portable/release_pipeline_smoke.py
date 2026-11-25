@@ -188,6 +188,34 @@ class ReleasePipeline(unittest.TestCase):
                 if fail_windows:
                     self.assertIn("Завершены цели: linux", stderr.getvalue())
 
+    def test_child_failure_reports_bounded_context_and_retains_log(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            log_data = (b"X" * 20000 + b'\n::error::fixture-output\nTraceback (most recent call last):\n'
+                        b'  File "C:\\fixture\\build\\common\\package.py", line 415, in validate_composer\n'
+                        b'UnicodeDecodeError: fixture-exception-message\n')
+            command = [sys.executable, "-c", f"import sys; sys.stdout.buffer.write({log_data!r}); sys.exit(23)"]
+            args = ["--targets", "windows", "--build-php", "php", "--composer", "/external/composer.phar",
+                    "--output-dir", str(base)]
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with mock.patch.object(release, "preflight", return_value=False), \
+                 mock.patch.object(release, "package_command", return_value=command), \
+                 contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                self.assertEqual(1, release.main(args))
+
+            diagnostic = stderr.getvalue()
+            self.assertIn("windows", diagnostic)
+            self.assertIn("23", diagnostic)
+            self.assertIn("UnicodeDecodeError", diagnostic)
+            self.assertIn("package.py:415", diagnostic)
+            self.assertIn("Завершены цели: нет", diagnostic)
+            self.assertLess(len(diagnostic.encode("utf-8")), 400)
+            for untrusted in ("::error::", "fixture-output", "fixture-exception-message", "C:\\fixture"):
+                self.assertNotIn(untrusted, stdout.getvalue() + diagnostic)
+            log, = base.glob("tvm-release-*/windows.log")
+            self.assertEqual(log_data, log.read_bytes())
+            self.assertEqual([], list(base.glob("tvm-release-*/artifacts/*")))
+
     def test_failed_native_smoke_never_publishes(self):
         with tempfile.TemporaryDirectory() as directory:
             session = Path(directory)

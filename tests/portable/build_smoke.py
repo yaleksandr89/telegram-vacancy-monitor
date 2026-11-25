@@ -377,6 +377,23 @@ class BuildBoundary(unittest.TestCase):
             with self.assertRaises(ValueError):
                 packaging.validate_composer(package)
 
+    def test_composer_utf8_with_cp1252_default(self):
+        with tempfile.TemporaryDirectory() as directory:
+            package = Path(directory)
+            requirements = {'php': '^8.5'}
+            manifest = {'require': requirements, 'authors': [{'name': 'Автор'}]}
+            lock = {'platform': requirements, 'packages': [], 'packages-dev': [], 'description': 'Автор'}
+            for name, document in [('composer.json', manifest), ('composer.lock', lock)]:
+                (package / name).write_text(json.dumps(document, ensure_ascii=False), encoding='utf-8')
+
+            read_text = Path.read_text
+
+            def read_with_cp1252_default(path, encoding=None, **kwargs):
+                return read_text(path, encoding='cp1252' if encoding is None else encoding, **kwargs)
+
+            with mock.patch.object(Path, 'read_text', read_with_cp1252_default):
+                packaging.validate_composer(package)
+
     def test_php_signer(self):
         with tempfile.TemporaryDirectory() as directory:
             work = Path(directory)

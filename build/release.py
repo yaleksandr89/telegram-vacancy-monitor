@@ -288,6 +288,30 @@ def package_command(args, target, cache, destination, cross):
     return command
 
 
+def package_failure_context(log):
+    # RU: Читаем ограниченный хвост traceback. Выводим только известный тип и номер строки.
+    # EN: Read a bounded traceback tail. Emit only a known type and line number.
+    try:
+        with log.open("rb") as stream:
+            stream.seek(max(0, stream.seek(0, os.SEEK_END) - 8192))
+            tail = stream.read(8192)
+    except OSError:
+        return ""
+    traceback = tail.rsplit(b"Traceback (most recent call last):", 1)[-1]
+    frames = re.findall(rb'^  File "[^"\r\n]*[/\\]common[/\\]package\.py", line ([0-9]{1,6}), in ',
+                        traceback, re.MULTILINE)
+    if not frames:
+        return ""
+    last_line = traceback.rstrip().rsplit(b"\n", 1)[-1]
+    error = re.match(rb"^(?:json\.decoder\.|subprocess\.|zipfile\.|tarfile\.)?"
+                     rb"(UnicodeDecodeError|UnicodeEncodeError|JSONDecodeError|CalledProcessError|TimeoutExpired|"
+                     rb"ValueError|KeyError|TypeError|FileNotFoundError|PermissionError|OSError|BadZipFile|ReadError)"
+                     rb"(?::|$)", last_line)
+    if error is None:
+        return " (package.py:" + frames[-1].decode("ascii") + ")"
+    return " (" + error[1].decode("ascii") + ", package.py:" + frames[-1].decode("ascii") + ")"
+
+
 def parser():
     result = argparse.ArgumentParser(description="Сборка выбранных standalone-поставок. Полный выпуск требует всех трёх ОС.")
     result.add_argument("--targets", type=selection, required=True, metavar="linux,windows,macos|all")
@@ -338,9 +362,14 @@ def main(argv=None):
             work.mkdir()
             log = session / (target + ".log")
             print("Сборка " + target + "; журнал: " + str(log), flush=True)
-            with log.open("wb") as stream:
-                subprocess.run(package_command(args, target, cache, work, cross), check=True, env=env,
-                               stdout=stream, stderr=subprocess.STDOUT)
+            try:
+                with log.open("wb") as stream:
+                    subprocess.run(package_command(args, target, cache, work, cross), check=True, env=env,
+                                   stdout=stream, stderr=subprocess.STDOUT)
+            except subprocess.CalledProcessError as error:
+                print(f"Ошибка упаковки {target}: код {error.returncode}{package_failure_context(log)}. "
+                      "Завершены цели: " + (",".join(succeeded) or "нет"), file=sys.stderr)
+                return 1
             found = list(work.rglob(filename(target)))
             if len(found) != 1:
                 raise ValueError("Ожидался ровно один архив: " + target)
